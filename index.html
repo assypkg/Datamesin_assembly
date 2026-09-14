@@ -17,7 +17,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Konfigurasi Firebase Asli Anda
+    // Konfigurasi Firebase Anda
     const firebaseConfig = {
       apiKey: "AIzaSyD8W_cABvEnNBtmAFIZPCHE2g9kyxrRi0s",
       authDomain: "mesin-cloud-app.firebaseapp.com",
@@ -28,7 +28,7 @@
       measurementId: "G-TML7FFBP0V"
     };
 
-    // Kunci API ImgBB Asli Anda
+    // Kunci API ImgBB (Gratis Foto)
     const IMGBB_API_KEY = "a9b18e1a675d42c3f4c85a298580a38d";
 
     const app = initializeApp(firebaseConfig);
@@ -87,7 +87,7 @@
             <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="absolute top-6 right-6 bg-red-500/80 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition z-10" title="Hapus Data">
               <i class="fa-solid fa-trash-can"></i>
             </button>
-            ${m.fotoUrl ? `<img src="${m.fotoUrl}" class="w-full h-48 object-cover rounded-xl border">` : `<div class="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Tanpa Foto</div>`}
+            ${(m.fotoUrl && m.fotoUrl.trim() !== "") ? `<img src="${m.fotoUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs\\'>Gagal Memuat Foto</div>';" class="w-full h-48 object-cover rounded-xl border">` : `<div class="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Tanpa Foto</div>`}
             <div>
               <div class="flex justify-between items-start pr-10">
                 <h4 class="font-bold text-slate-800 text-base">${m.namaMesin}</h4>
@@ -108,7 +108,7 @@
         container.innerHTML = data.map(m => `
           <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 overflow-hidden">
-              ${m.fotoUrl ? `<img src="${m.fotoUrl}" class="w-12 h-12 object-cover rounded-lg border flex-shrink-0">` : `<div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-[10px] flex-shrink-0"><i class="fa-solid fa-image"></i></div>`}
+              ${(m.fotoUrl && m.fotoUrl.trim() !== "") ? `<img src="${m.fotoUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-[10px] flex-shrink-0\\'><i class=\\'fa-solid fa-image\\'></i></div>';" class="w-12 h-12 object-cover rounded-lg border flex-shrink-0">` : `<div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-[10px] flex-shrink-0"><i class="fa-solid fa-image"></i></div>`}
               <div class="truncate">
                 <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin}</h4>
                 <p class="text-[11px] text-slate-500">${m.plant} • Seri: <strong>${m.noSeri}</strong></p>
@@ -131,7 +131,7 @@
             <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="absolute top-4 right-4 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition z-10" title="Hapus Data">
               <i class="fa-solid fa-trash-can"></i>
             </button>
-            ${m.fotoUrl ? `<img src="${m.fotoUrl}" class="w-full h-28 object-cover rounded-lg border mb-2">` : `<div class="w-full h-28 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2">Tanpa Foto</div>`}
+            ${(m.fotoUrl && m.fotoUrl.trim() !== "") ? `<img src="${m.fotoUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-28 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2\\'>Gagal Memuat Foto</div>';" class="w-full h-28 object-cover rounded-lg border mb-2">` : `<div class="w-full h-28 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2">Tanpa Foto</div>`}
             <div>
               <h4 class="font-bold text-slate-800 text-xs truncate">${m.namaMesin}</h4>
               <p class="text-[10px] text-slate-500 truncate">${m.plant}</p>
@@ -166,7 +166,8 @@
           });
           const dataImg = await resImg.json();
           if (dataImg.success) {
-            fotoUrl = dataImg.data.url;
+            // Pembaruan: Menggunakan display_url untuk menghindari pemblokiran CORS dari GitHub Pages
+            fotoUrl = dataImg.data.display_url || dataImg.data.url;
           }
         }
 
