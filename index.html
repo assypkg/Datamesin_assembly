@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Database Mesin Assembly</title>
+  <title>Master Mesin Cloud</title>
   
   <!-- Tailwind CSS & FontAwesome -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   
-  <!-- HTML5 QR Code Scanner -->
+  <!-- HTML5 QR Code Scanner & Tesseract.js untuk OCR Teks/Angka -->
   <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <!-- Firebase SDK (Version 10 Modular via CDN) -->
   <script type="module">
@@ -63,13 +64,24 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Konversi gambar menjadi format teks Base64 (Hemat Database)
             resolve(canvas.toDataURL('image/jpeg', quality));
           };
           img.onerror = reject;
         };
         reader.onerror = reject;
       });
+    }
+
+    // Format Tanggal Detail (Hari, Tgl, Jam)
+    function formatTanggalDetail(isoString) {
+      if(!isoString) return "-";
+      const date = new Date(isoString);
+      const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()];
+      const tgl = date.getDate().toString().padStart(2, '0');
+      const bln = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][date.getMonth()];
+      const jam = date.getHours().toString().padStart(2, '0');
+      const mnt = date.getMinutes().toString().padStart(2, '0');
+      return `${hari}, ${tgl} ${bln} - ${jam}:${mnt} WIB`;
     }
 
     // Memuat Data dari Firestore
@@ -86,6 +98,8 @@
           listMesin.push({ id: d.id, ...d.data() });
         });
         
+        renderKPI(listMesin);
+        renderLog(listMesin);
         renderCards(listMesin);
       } catch (err) {
         console.error(err);
@@ -93,7 +107,32 @@
       }
     }
 
-    // Fitur Hapus Data dari Firestore Database
+    // Render KPI Card
+    function renderKPI(data) {
+      document.getElementById('kpiTotalItem').innerText = data.length;
+      const totalUnit = data.reduce((sum, item) => sum + (Number(item.jumlah) || 0), 0);
+      document.getElementById('kpiTotalUnit').innerText = totalUnit;
+    }
+
+    // Render 3 Riwayat Log Terakhir
+    function renderLog(data) {
+      const container = document.getElementById('logContainer');
+      const latest3 = data.slice(0, 3);
+      
+      if(latest3.length === 0) {
+         container.innerHTML = `<div class="text-[10px] text-slate-400 mt-2 text-center">Belum ada riwayat input</div>`;
+         return;
+      }
+
+      container.innerHTML = latest3.map(m => `
+        <div class="flex flex-col border-l-2 border-emerald-400 pl-2 mb-1.5 last:mb-0">
+          <span class="text-[10px] font-bold text-slate-700 truncate">${m.namaMesin}</span>
+          <span class="text-[9px] text-slate-500">${formatTanggalDetail(m.waktuInput)}</span>
+        </div>
+      `).join('');
+    }
+
+    // Fitur Hapus Data dari Firestore
     async function hapusDataMesin(id, nama) {
       if (confirm(`Apakah Anda yakin ingin menghapus data mesin "${nama}"?`)) {
         try {
@@ -105,7 +144,7 @@
       }
     }
 
-    // Render Tampilan Berdasarkan Layout Explorer yang Dipilih
+    // Render Tampilan Explorer
     function renderCards(data) {
       const container = document.getElementById('cardsContainer');
       const currentView = document.getElementById('viewMode').value;
@@ -115,7 +154,6 @@
         return;
       }
 
-      // Template Gambar (Base64 Teks)
       const getImageHTML = (fotoUrl, kelas) => {
         return (fotoUrl && fotoUrl.length > 50) 
           ? `<img src="${fotoUrl}" class="${kelas}">` 
@@ -134,7 +172,10 @@
               <div class="flex justify-between items-start pr-10">
                 <h4 class="font-bold text-slate-800 text-base">${m.namaMesin}</h4>
               </div>
-              <p class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant}</p>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">${m.tipeMesin || '-'}</span>
+                <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant}</p>
+              </div>
             </div>
             <div class="grid grid-cols-3 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100">
               <div><span class="text-slate-400 block">No Seri:</span> <strong>${m.noSeri}</strong></div>
@@ -151,7 +192,7 @@
               ${getImageHTML(m.fotoUrl, 'w-12 h-12 object-cover rounded-lg border flex-shrink-0')}
               <div class="truncate">
                 <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin}</h4>
-                <p class="text-[11px] text-slate-500">${m.plant} • Seri: <strong>${m.noSeri}</strong></p>
+                <p class="text-[10px] text-slate-500">${m.plant} • <span class="text-blue-500 font-semibold">${m.tipeMesin || '-'}</span></p>
               </div>
             </div>
             <div class="flex items-center gap-3 flex-shrink-0">
@@ -172,10 +213,10 @@
             ${getImageHTML(m.fotoUrl, 'w-full h-28 object-cover rounded-lg border mb-2')}
             <div>
               <h4 class="font-bold text-slate-800 text-xs truncate">${m.namaMesin}</h4>
-              <p class="text-[10px] text-slate-500 truncate">${m.plant}</p>
-              <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg flex justify-between">
-                <span>Seri: ${m.noSeri}</span>
-                <strong class="text-emerald-600">${m.jumlah} U</strong>
+              <p class="text-[9px] text-blue-500 font-bold mb-1 truncate">${m.tipeMesin || '-'}</p>
+              <div class="mt-1 text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg flex justify-between">
+                <span class="truncate pr-1">${m.noSeri}</span>
+                <strong class="text-emerald-600 flex-shrink-0">${m.jumlah} U</strong>
               </div>
             </div>
           </div>
@@ -183,7 +224,7 @@
       }
     }
 
-    // Submit Form & Proses Kompresi
+    // Submit Form
     document.getElementById('formMesin').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btnSimpan');
@@ -194,15 +235,13 @@
         let fotoDataFinal = '';
         const fotoFile = document.getElementById('fotoInput').files[0];
 
-        // 1. Kompresi gambar langsung di browser tanpa upload pihak ketiga
         if (fotoFile) {
-          // Kompres maksimal lebar/tinggi 800px dan kualitas 70% agar hemat database
           fotoDataFinal = await kompresiFoto(fotoFile, 800, 800, 0.7);
         }
 
-        // 2. Simpan Data Teks beserta Data Foto Terkompresi ke Firestore
         await addDoc(collection(db, "mesin"), {
           namaMesin: document.getElementById('namaMesin').value,
+          tipeMesin: document.getElementById('tipeMesin').value,
           plant: document.getElementById('plant').value,
           tahun: Number(document.getElementById('tahun').value),
           noSeri: document.getElementById('noSeri').value,
@@ -237,8 +276,8 @@
 
   <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md flex justify-between items-center">
     <div>
-      <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Database Mesin Assembly</h1>
-      <p class="text-xs text-slate-400">Cloud Storage Firestore</p>
+      <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>DataBase Mesin Assembly</h1>
+      <p class="text-xs text-slate-400">Dashboard & Cloud System</p>
     </div>
     <button onclick="bukaModal()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
       <i class="fa-solid fa-plus"></i> Tambah
@@ -246,9 +285,30 @@
   </header>
 
   <main class="max-w-md mx-auto p-4">
+    
+    <!-- DASHBOARD KPI & LOG -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-sm flex flex-col justify-center">
+        <span class="text-[10px] font-semibold opacity-90 tracking-wide uppercase">Total Aset</span>
+        <div class="flex items-end gap-1 mt-1">
+          <span id="kpiTotalItem" class="text-3xl font-bold">0</span>
+          <span class="text-[10px] mb-1.5 opacity-80">Mesin Terdata</span>
+        </div>
+        <div class="text-[10px] bg-black/20 px-2 py-1 rounded mt-2 inline-block w-fit font-medium">
+          <i class="fa-solid fa-cubes mr-1"></i><span id="kpiTotalUnit">0</span> Unit Aktual
+        </div>
+      </div>
+      
+      <div class="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex flex-col">
+        <span class="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wide border-b pb-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i>Riwayat Terakhir</span>
+        <div id="logContainer" class="flex-1 flex flex-col justify-center gap-1"></div>
+      </div>
+    </div>
+
+    <!-- Toolbar Explorer -->
     <div class="flex gap-2 mb-4">
       <div class="relative flex-1">
-        <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari mesin, seri, atau plant..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm">
+        <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari tipe, nama, atau seri..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm">
         <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
       </div>
       <select id="viewMode" onchange="filterData()" class="bg-white border border-slate-200 text-xs font-semibold rounded-xl px-2.5 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700">
@@ -261,6 +321,7 @@
     <div id="cardsContainer" class="space-y-4"></div>
   </main>
 
+  <!-- Modal Form Input -->
   <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
       <div class="bg-white rounded-2xl max-w-md w-full p-5 text-left shadow-2xl relative my-8">
@@ -273,6 +334,11 @@
           <div>
             <label class="font-semibold text-slate-700 block mb-1">Nama Mesin</label>
             <input type="text" id="namaMesin" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1">Tipe Mesin</label>
+            <input type="text" id="tipeMesin" required placeholder="Contoh: Press, Puncher, Vacum, Blow, Hotmelt, Ultrasonic, UV Curing..." class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -293,12 +359,22 @@
           <div>
             <label class="font-semibold text-slate-700 block mb-1">Nomor Seri</label>
             <div class="flex gap-2">
-              <input type="text" id="noSeri" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
-              <button type="button" onclick="mulaiScanQR()" class="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 flex items-center justify-center">
-                <i class="fa-solid fa-qrcode text-base"></i>
+              <input type="text" id="noSeri" required placeholder="Ketik manual atau scan teks foto" class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+              <!-- Tombol Scanner QR / Barcode / Foto Teks -->
+              <button type="button" onclick="bukaOpsiScan()" class="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 flex items-center justify-center" title="Scan Barcode atau Foto Teks">
+                <i class="fa-solid fa-camera text-base"></i>
               </button>
             </div>
+            
+            <!-- Area Kamera QR / Barcode -->
             <div id="reader" class="hidden mt-2 rounded-lg overflow-hidden border"></div>
+
+            <!-- Tombol Pilih Foto Plat Nomor untuk dibaca teks/angkanya (OCR) -->
+            <div id="ocrContainer" class="hidden mt-2 p-2 bg-slate-50 border rounded-lg text-center">
+              <p class="text-[10px] text-slate-500 mb-1">Atau ambil foto plat nomor/teks langsung:</p>
+              <input type="file" id="ocrInput" accept="image/*" capture="environment" onchange="prosesScanTeks(event)" class="text-[10px]">
+              <div id="ocrStatus" class="text-[10px] text-emerald-600 font-semibold mt-1"></div>
+            </div>
           </div>
 
           <div>
@@ -307,7 +383,7 @@
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1">Foto Mesin</label>
+            <label class="font-semibold text-slate-700 block mb-1">Foto Mesin (Opsional)</label>
             <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="previewFoto(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
             <img id="imgPreview" class="hidden mt-2 w-full h-36 object-cover rounded-lg border">
           </div>
@@ -330,7 +406,8 @@
       const filtered = list.filter(m => 
         m.namaMesin.toLowerCase().includes(q) || 
         m.noSeri.toLowerCase().includes(q) || 
-        m.plant.toLowerCase().includes(q)
+        m.plant.toLowerCase().includes(q) ||
+        (m.tipeMesin && m.tipeMesin.toLowerCase().includes(q))
       );
       window.renderCards(filtered);
     }
@@ -339,6 +416,8 @@
     function tutupModal() { 
       document.getElementById('modalForm').classList.add('hidden'); 
       if (html5QrCode) html5QrCode.stop();
+      document.getElementById('reader').classList.add('hidden');
+      document.getElementById('ocrContainer').classList.add('hidden');
     }
 
     function previewFoto(e) {
@@ -354,25 +433,72 @@
       }
     }
 
-    function mulaiScanQR() {
+    // Membuka menu pemindaian (QR/Barcode atau Scan Teks Foto)
+    function bukaOpsiScan() {
       const readerDiv = document.getElementById('reader');
-      readerDiv.classList.remove('hidden');
-      html5QrCode = new Html5Qrcode("reader");
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 200, height: 200 } },
-        (decodedText) => {
-          document.getElementById('noSeri').value = decodedText;
-          html5QrCode.stop();
-          readerDiv.classList.add('hidden');
+      const ocrDiv = document.getElementById('ocrContainer');
+      
+      // Toggle tampilkan QR scanner & opsi OCR foto teks
+      if (readerDiv.classList.contains('hidden')) {
+        readerDiv.classList.remove('hidden');
+        ocrDiv.classList.remove('hidden');
+        
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 200, height: 200 } },
+          (decodedText) => {
+            document.getElementById('noSeri').value = decodedText;
+            html5QrCode.stop();
+            readerDiv.classList.add('hidden');
+            ocrDiv.classList.add('hidden');
+          }
+        ).catch(err => {
+          console.log("Kamera QR tidak aktif, gunakan foto teks OCR.");
+        });
+      } else {
+        if (html5QrCode) html5QrCode.stop();
+        readerDiv.classList.add('hidden');
+        ocrDiv.classList.add('hidden');
+      }
+    }
+
+    // Fungsi Pembaca Teks/Angka dari Foto (OCR)
+    async function prosesScanTeks(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const statusDiv = document.getElementById('ocrStatus');
+      statusDiv.innerText = "Membaca teks dari foto... Mohon tunggu sebentar.";
+
+      try {
+        const result = await Tesseract.recognize(file, 'eng', {
+          logger: m => console.log(m)
+        });
+        
+        let hasilTeks = result.data.text.trim().replace(/\s+/g, ' ');
+        if (hasilTeks) {
+          document.getElementById('noSeri').value = hasilTeks;
+          statusDiv.innerText = "Berhasil membaca teks!";
+          setTimeout(() => {
+            document.getElementById('reader').classList.add('hidden');
+            document.getElementById('ocrContainer').classList.add('hidden');
+            if (html5QrCode) html5QrCode.stop();
+          }, 1500);
+        } else {
+          statusDiv.innerText = "Teks tidak terbaca jelas, coba foto ulang lebih dekat.";
         }
-      );
+      } catch (err) {
+        statusDiv.innerText = "Gagal memproses teks gambar.";
+        console.error(err);
+      }
     }
 
     window.bukaModal = bukaModal;
     window.tutupModal = tutupModal;
     window.previewFoto = previewFoto;
-    window.mulaiScanQR = mulaiScanQR;
+    window.bukaOpsiScan = bukaOpsiScan;
+    window.prosesScanTeks = prosesScanTeks;
     window.filterData = filterData;
   </script>
 </body>
