@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Mesin Cloud</title>
+  
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- HTML5 QR Code Scanner -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <!-- Firebase SDK (Version 10 Modular via CDN) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // =========================================================================
+    // KONFIGURASI FIREBASE ANDA (SUDAH TERPASANG):
+    // =========================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyD8W_cABvEnNBtmAFIZPCHE2g9kyxrRi0s",
+      authDomain: "mesin-cloud-app.firebaseapp.com",
+      projectId: "mesin-cloud-app",
+      storageBucket: "mesin-cloud-app.firebasestorage.app",
+      messagingSenderId: "20271105778",
+      appId: "1:20271105778:web:c253cf35236581a571726b",
+      measurementId: "G-TML7FFBP0V"
+    };
+    // =========================================================================
+
+    // KUNCI API IMGBB (GRATIS FOTO):
+    const IMGBB_API_KEY = "a9b18e1a675d42c3f4c85a298580a38d";
+
+    // Inisialisasi Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let listMesin = [];
+
+    // Memuat Data dari Firestore
+    async function muatData() {
+      const container = document.getElementById('cardsContainer');
+      container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Memuat data dari Cloud...</div>`;
+      
+      try {
+        const q = query(collection(db, "mesin"), orderBy("waktuInput", "desc"));
+        const querySnapshot = await getDocs(q);
+        
+        listMesin = [];
+        querySnapshot.forEach((doc) => {
+          listMesin.push({ id: doc.id, ...doc.data() });
+        });
+        
+        renderCards(listMesin);
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm">Gagal memuat data. Pastikan Firestore di Firebase Console sudah di-enable (Test Mode).</div>`;
+      }
+    }
+
+    // Render Tampilan Card Modern
+    function renderCards(data) {
+      const container = document.getElementById('cardsContainer');
+      if (data.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Belum ada data mesin di database.</div>`;
+        return;
+      }
+      container.innerHTML = data.map(m => `
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+          ${m.fotoUrl ? `<img src="${m.fotoUrl}" class="w-full h-48 object-cover rounded-xl border">` : `<div class="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Tanpa Foto</div>`}
+          <div>
+            <div class="flex justify-between items-start">
+              <h4 class="font-bold text-slate-800 text-base">${m.namaMesin}</h4>
+              <span class="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full">${m.jumlah} Unit</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant}</p>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100">
+            <div><span class="text-slate-400 block">No Seri:</span> <strong>${m.noSeri}</strong></div>
+            <div><span class="text-slate-400 block">Tahun:</span> <strong>${m.tahun}</strong></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Submit Form
+    document.getElementById('formMesin').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btnSimpan');
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mengunggah Foto & Menyimpan...`;
+      btn.disabled = true;
+
+      try {
+        let fotoUrl = '';
+        const fotoFile = document.getElementById('fotoInput').files[0];
+
+        // 1. Upload Foto ke ImgBB
+        if (fotoFile) {
+          const formData = new FormData();
+          formData.append("image", fotoFile);
+
+          const resImg = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+            method: "POST",
+            body: formData
+          });
+          const dataImg = await resImg.json();
+          if (dataImg.success) {
+            fotoUrl = dataImg.data.url;
+          }
+        }
+
+        // 2. Simpan Data Teks ke Firestore
+        await addDoc(collection(db, "mesin"), {
+          namaMesin: document.getElementById('namaMesin').value,
+          plant: document.getElementById('plant').value,
+          tahun: Number(document.getElementById('tahun').value),
+          noSeri: document.getElementById('noSeri').value,
+          jumlah: Number(document.getElementById('jumlah').value),
+          fotoUrl: fotoUrl,
+          waktuInput: new Date().toISOString()
+        });
+
+        btn.innerText = "Simpan Data";
+        btn.disabled = false;
+        
+        window.tutupModal();
+        document.getElementById('formMesin').reset();
+        document.getElementById('imgPreview').classList.add('hidden');
+        muatData();
+      } catch (err) {
+        alert("Terjadi kesalahan: " + err.message);
+        btn.innerText = "Simpan Data";
+        btn.disabled = false;
+      }
+    });
+
+    window.muatData = muatData;
+    window.renderCards = renderCards;
+    window.getListMesin = () => listMesin;
+    
+    muatData();
+  </script>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 pb-20">
+
+  <!-- Header -->
+  <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md flex justify-between items-center">
+    <div>
+      <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Master Mesin</h1>
+      <p class="text-xs text-slate-400">Database Cloud</p>
+    </div>
+    <button onclick="bukaModal()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
+      <i class="fa-solid fa-plus"></i> Tambah
+    </button>
+  </header>
+
+  <!-- Container Utama -->
+  <main class="max-w-md mx-auto p-4">
+    <!-- Search Bar -->
+    <div class="relative mb-4">
+      <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari nama mesin, seri, atau plant..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm">
+      <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+    </div>
+
+    <!-- Cards Data Mesin -->
+    <div id="cardsContainer" class="space-y-4"></div>
+  </main>
+
+  <!-- Modal Form Input -->
+  <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
+    <div class="min-h-screen px-4 text-center flex items-center justify-center">
+      <div class="bg-white rounded-2xl max-w-md w-full p-5 text-left shadow-2xl relative my-8">
+        <div class="flex justify-between items-center border-b pb-3 mb-4">
+          <h3 class="font-bold text-slate-800">Input Mesin Baru</h3>
+          <button onclick="tutupModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+
+        <form id="formMesin" class="space-y-3 text-xs">
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1">Nama Mesin</label>
+            <input type="text" id="namaMesin" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1">Plant / Lokasi</label>
+              <select id="plant" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+                <option value="Assembly Plant Alpha">Assembly Plant Alpha</option>
+                <option value="Assembly Plant Beta">Assembly Plant Beta</option>
+                <option value="Plant 3">Plant 3</option>
+              </select>
+            </div>
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1">Tahun Mesin</label>
+              <input type="number" id="tahun" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="2024">
+            </div>
+          </div>
+
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1">Nomor Seri</label>
+            <div class="flex gap-2">
+              <input type="text" id="noSeri" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+              <button type="button" onclick="mulaiScanQR()" class="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 flex items-center justify-center">
+                <i class="fa-solid fa-qrcode text-base"></i>
+              </button>
+            </div>
+            <div id="reader" class="hidden mt-2 rounded-lg overflow-hidden border"></div>
+          </div>
+
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1">Jumlah (Unit)</label>
+            <input type="number" id="jumlah" value="1" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+          </div>
+
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1">Foto Mesin</label>
+            <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="previewFoto(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+            <img id="imgPreview" class="hidden mt-2 w-full h-36 object-cover rounded-lg border">
+          </div>
+
+          <div class="pt-3 flex gap-2">
+            <button type="button" onclick="tutupModal()" class="w-1/2 py-2.5 rounded-xl border font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
+            <button type="submit" id="btnSimpan" class="w-1/2 py-2.5 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md">Simpan Data</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let html5QrCode = null;
+
+    function filterData() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const list = window.getListMesin();
+      const filtered = list.filter(m => 
+        m.namaMesin.toLowerCase().includes(q) || 
+        m.noSeri.toLowerCase().includes(q) || 
+        m.plant.toLowerCase().includes(q)
+      );
+      window.renderCards(filtered);
+    }
+
+    function bukaModal() { document.getElementById('modalForm').classList.remove('hidden'); }
+    function tutupModal() { 
+      document.getElementById('modalForm').classList.add('hidden'); 
+      if (html5QrCode) html5QrCode.stop();
+    }
+
+    function previewFoto(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          const img = document.getElementById('imgPreview');
+          img.src = evt.target.result;
+          img.classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function mulaiScanQR() {
+      const readerDiv = document.getElementById('reader');
+      readerDiv.classList.remove('hidden');
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 200, height: 200 } },
+        (decodedText) => {
+          document.getElementById('noSeri').value = decodedText;
+          html5QrCode.stop();
+          readerDiv.classList.add('hidden');
+        }
+      );
+    }
+
+    window.bukaModal = bukaModal;
+    window.tutupModal = tutupModal;
+    window.previewFoto = previewFoto;
+    window.mulaiScanQR = mulaiScanQR;
+    window.filterData = filterData;
+  </script>
+</body>
+</html>
