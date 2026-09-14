@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Master Mesin Cloud</title>
+  <title>Database Mesin Assembly</title>
   
   <!-- Tailwind CSS & FontAwesome -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -17,7 +17,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Konfigurasi Firebase Anda
+    // Konfigurasi Firebase Asli Anda
     const firebaseConfig = {
       apiKey: "AIzaSyD8W_cABvEnNBtmAFIZPCHE2g9kyxrRi0s",
       authDomain: "mesin-cloud-app.firebaseapp.com",
@@ -28,13 +28,49 @@
       measurementId: "G-TML7FFBP0V"
     };
 
-    // Kunci API ImgBB (Gratis Foto)
-    const IMGBB_API_KEY = "a9b18e1a675d42c3f4c85a298580a38d";
-
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
     let listMesin = [];
+
+    // Fungsi Kompresi Foto ke Base64 Teks (Client-side)
+    function kompresiFoto(file, maxWidth, maxHeight, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = event => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round(height *= maxWidth / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round(width *= maxHeight / height);
+                height = maxHeight;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Konversi gambar menjadi format teks Base64 (Hemat Database)
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+        };
+        reader.onerror = reject;
+      });
+    }
 
     // Memuat Data dari Firestore
     async function muatData() {
@@ -53,7 +89,7 @@
         renderCards(listMesin);
       } catch (err) {
         console.error(err);
-        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm">Gagal memuat data. Pastikan Firestore di Firebase Console sudah di-enable (Test Mode).</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm">Gagal memuat data. Pastikan koneksi dan aturan database terbuka.</div>`;
       }
     }
 
@@ -79,7 +115,13 @@
         return;
       }
 
-      // 1. Opsi Kartu Standard
+      // Template Gambar (Base64 Teks)
+      const getImageHTML = (fotoUrl, kelas) => {
+        return (fotoUrl && fotoUrl.length > 50) 
+          ? `<img src="${fotoUrl}" class="${kelas}">` 
+          : `<div class="${kelas} bg-slate-100 flex items-center justify-center text-slate-400 text-xs"><i class="fa-solid fa-image"></i></div>`;
+      };
+
       if (currentView === 'card') {
         container.className = "space-y-4";
         container.innerHTML = data.map(m => `
@@ -87,7 +129,7 @@
             <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="absolute top-6 right-6 bg-red-500/80 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition z-10" title="Hapus Data">
               <i class="fa-solid fa-trash-can"></i>
             </button>
-            ${(m.fotoUrl && m.fotoUrl.trim() !== "") ? `<img src="${m.fotoUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs\\'>Gagal Memuat Foto</div>';" class="w-full h-48 object-cover rounded-xl border">` : `<div class="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Tanpa Foto</div>`}
+            ${getImageHTML(m.fotoUrl, 'w-full h-48 object-cover rounded-xl border')}
             <div>
               <div class="flex justify-between items-start pr-10">
                 <h4 class="font-bold text-slate-800 text-base">${m.namaMesin}</h4>
@@ -101,14 +143,12 @@
             </div>
           </div>
         `).join('');
-      } 
-      // 2. Opsi Details (List Baris)
-      else if (currentView === 'details') {
+      } else if (currentView === 'details') {
         container.className = "space-y-2";
         container.innerHTML = data.map(m => `
           <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 overflow-hidden">
-              ${(m.fotoUrl && m.fotoUrl.trim() !== "") ? `<img src="${m.fotoUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-[10px] flex-shrink-0\\'><i class=\\'fa-solid fa-image\\'></i></div>';" class="w-12 h-12 object-cover rounded-lg border flex-shrink-0">` : `<div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-[10px] flex-shrink-0"><i class="fa-solid fa-image"></i></div>`}
+              ${getImageHTML(m.fotoUrl, 'w-12 h-12 object-cover rounded-lg border flex-shrink-0')}
               <div class="truncate">
                 <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin}</h4>
                 <p class="text-[11px] text-slate-500">${m.plant} • Seri: <strong>${m.noSeri}</strong></p>
@@ -122,16 +162,14 @@
             </div>
           </div>
         `).join('');
-      } 
-      // 3. Opsi Large Icons (Grid Cards)
-      else if (currentView === 'large') {
+      } else if (currentView === 'large') {
         container.className = "grid grid-cols-2 gap-3";
         container.innerHTML = data.map(m => `
           <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col justify-between relative">
             <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="absolute top-4 right-4 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition z-10" title="Hapus Data">
               <i class="fa-solid fa-trash-can"></i>
             </button>
-            ${(m.fotoUrl && m.fotoUrl.trim() !== "") ? `<img src="${m.fotoUrl}" referrerpolicy="no-referrer" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-full h-28 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2\\'>Gagal Memuat Foto</div>';" class="w-full h-28 object-cover rounded-lg border mb-2">` : `<div class="w-full h-28 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-xs mb-2">Tanpa Foto</div>`}
+            ${getImageHTML(m.fotoUrl, 'w-full h-28 object-cover rounded-lg border mb-2')}
             <div>
               <h4 class="font-bold text-slate-800 text-xs truncate">${m.namaMesin}</h4>
               <p class="text-[10px] text-slate-500 truncate">${m.plant}</p>
@@ -145,39 +183,31 @@
       }
     }
 
-    // Submit Form Simpan Data
+    // Submit Form & Proses Kompresi
     document.getElementById('formMesin').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btnSimpan');
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Mengunggah Foto & Menyimpan...`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Menyimpan...`;
       btn.disabled = true;
 
       try {
-        let fotoUrl = '';
+        let fotoDataFinal = '';
         const fotoFile = document.getElementById('fotoInput').files[0];
 
+        // 1. Kompresi gambar langsung di browser tanpa upload pihak ketiga
         if (fotoFile) {
-          const formData = new FormData();
-          formData.append("image", fotoFile);
-
-          const resImg = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-            method: "POST",
-            body: formData
-          });
-          const dataImg = await resImg.json();
-          if (dataImg.success) {
-            // Pembaruan: Menggunakan display_url untuk menghindari pemblokiran CORS dari GitHub Pages
-            fotoUrl = dataImg.data.display_url || dataImg.data.url;
-          }
+          // Kompres maksimal lebar/tinggi 800px dan kualitas 70% agar hemat database
+          fotoDataFinal = await kompresiFoto(fotoFile, 800, 800, 0.7);
         }
 
+        // 2. Simpan Data Teks beserta Data Foto Terkompresi ke Firestore
         await addDoc(collection(db, "mesin"), {
           namaMesin: document.getElementById('namaMesin').value,
           plant: document.getElementById('plant').value,
           tahun: Number(document.getElementById('tahun').value),
           noSeri: document.getElementById('noSeri').value,
           jumlah: Number(document.getElementById('jumlah').value),
-          fotoUrl: fotoUrl,
+          fotoUrl: fotoDataFinal, 
           waktuInput: new Date().toISOString()
         });
 
@@ -205,26 +235,22 @@
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 pb-20">
 
-  <!-- Header -->
   <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md flex justify-between items-center">
     <div>
-      <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Master Mesin</h1>
-      <p class="text-xs text-slate-400">Database Cloud</p>
+      <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Database Mesin Assembly</h1>
+      <p class="text-xs text-slate-400">Cloud Storage Firestore</p>
     </div>
     <button onclick="bukaModal()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
       <i class="fa-solid fa-plus"></i> Tambah
     </button>
   </header>
 
-  <!-- Container Utama -->
   <main class="max-w-md mx-auto p-4">
-    <!-- Toolbar Explorer Tampilan & Search Bar -->
     <div class="flex gap-2 mb-4">
       <div class="relative flex-1">
         <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari mesin, seri, atau plant..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm">
         <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
       </div>
-      <!-- Dropdown Pengubah Tampilan (Explorer Style) -->
       <select id="viewMode" onchange="filterData()" class="bg-white border border-slate-200 text-xs font-semibold rounded-xl px-2.5 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700">
         <option value="card"> Kartu</option>
         <option value="details"> Details (List)</option>
@@ -232,11 +258,9 @@
       </select>
     </div>
 
-    <!-- Cards Data Mesin -->
     <div id="cardsContainer" class="space-y-4"></div>
   </main>
 
-  <!-- Modal Form Input -->
   <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
       <div class="bg-white rounded-2xl max-w-md w-full p-5 text-left shadow-2xl relative my-8">
