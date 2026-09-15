@@ -3,22 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Master Mesin Cloud</title>
+  <title>Database Mesin Cloud</title>
   
   <!-- Tailwind CSS & FontAwesome -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   
-  <!-- HTML5 QR Code Scanner & Tesseract.js untuk OCR Teks/Angka -->
+  <!-- HTML5 QR Code Scanner & Tesseract.js untuk OCR -->
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-  <!-- Firebase SDK (Version 10 Modular via CDN) -->
+  <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, updateDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Konfigurasi Firebase Asli Anda
     const firebaseConfig = {
       apiKey: "AIzaSyD8W_cABvEnNBtmAFIZPCHE2g9kyxrRi0s",
       authDomain: "mesin-cloud-app.firebaseapp.com",
@@ -34,7 +33,7 @@
 
     let listMesin = [];
 
-    // Fungsi Kompresi Foto ke Base64 Teks (Client-side)
+    // Kompresi Foto
     function kompresiFoto(file, maxWidth, maxHeight, quality) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -72,7 +71,7 @@
       });
     }
 
-    // Format Tanggal Detail (Hari, Tgl, Jam)
+    // Format Tanggal
     function formatTanggalDetail(isoString) {
       if(!isoString) return "-";
       const date = new Date(isoString);
@@ -84,10 +83,10 @@
       return `${hari}, ${tgl} ${bln} - ${jam}:${mnt} WIB`;
     }
 
-    // Memuat Data dari Firestore
+    // Muat Data
     async function muatData() {
       const container = document.getElementById('cardsContainer');
-      container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Memuat data dari Cloud...</div>`;
+      container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm w-full col-span-full"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Memuat data dari Cloud...</div>`;
       
       try {
         const q = query(collection(db, "mesin"), orderBy("waktuInput", "desc"));
@@ -100,41 +99,38 @@
         
         renderKPI(listMesin);
         renderLog(listMesin);
-        renderCards(listMesin);
+        filterData(); 
       } catch (err) {
         console.error(err);
-        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm">Gagal memuat data. Pastikan koneksi dan aturan database terbuka.</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Gagal memuat data. Periksa koneksi internet Anda.</div>`;
       }
     }
 
-    // Render KPI Card
     function renderKPI(data) {
       document.getElementById('kpiTotalItem').innerText = data.length;
       const totalUnit = data.reduce((sum, item) => sum + (Number(item.jumlah) || 0), 0);
       document.getElementById('kpiTotalUnit').innerText = totalUnit;
     }
 
-    // Render 3 Riwayat Log Terakhir
     function renderLog(data) {
       const container = document.getElementById('logContainer');
       const latest3 = data.slice(0, 3);
       
       if(latest3.length === 0) {
-         container.innerHTML = `<div class="text-[10px] text-slate-400 mt-2 text-center">Belum ada riwayat input</div>`;
+         container.innerHTML = `<div class="text-[10px] text-slate-400 mt-2 text-center w-full">Belum ada riwayat input</div>`;
          return;
       }
 
       container.innerHTML = latest3.map(m => `
-        <div class="flex flex-col border-l-2 border-emerald-400 pl-2 mb-1.5 last:mb-0">
+        <div class="flex flex-col border-l-2 border-emerald-400 pl-2 mb-1.5 last:mb-0 w-full">
           <span class="text-[10px] font-bold text-slate-700 truncate">${m.namaMesin}</span>
           <span class="text-[9px] text-slate-500">${formatTanggalDetail(m.waktuInput)}</span>
         </div>
       `).join('');
     }
 
-    // Fitur Hapus Data dari Firestore
     async function hapusDataMesin(id, nama) {
-      if (confirm(`Apakah Anda yakin ingin menghapus data mesin "${nama}"?`)) {
+      if (confirm(`Hapus data mesin "${nama}" secara permanen?`)) {
         try {
           await deleteDoc(doc(db, "mesin", id));
           muatData();
@@ -144,13 +140,13 @@
       }
     }
 
-    // Render Tampilan Explorer
     function renderCards(data) {
       const container = document.getElementById('cardsContainer');
       const currentView = document.getElementById('viewMode').value;
 
       if (data.length === 0) {
-        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Belum ada data mesin di database.</div>`;
+        container.className = "w-full";
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm w-full col-span-full">Data tidak ditemukan.</div>`;
         return;
       }
 
@@ -161,61 +157,68 @@
       };
 
       if (currentView === 'card') {
-        container.className = "space-y-4";
+        container.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
         container.innerHTML = data.map(m => `
-          <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3 relative group">
-            <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="absolute top-6 right-6 bg-red-500/80 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-xs shadow-md transition z-10" title="Hapus Data">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
+          <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3 relative group flex flex-col justify-between hover:shadow-md transition duration-200">
+            <div class="absolute top-4 right-4 flex gap-1.5 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
+              <button onclick="editDataMesin('${m.id}')" class="bg-blue-500/90 hover:bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Edit Data">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500/90 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Hapus Data">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
             ${getImageHTML(m.fotoUrl, 'w-full h-48 object-cover rounded-xl border')}
-            <div>
-              <div class="flex justify-between items-start pr-10">
-                <h4 class="font-bold text-slate-800 text-base">${m.namaMesin}</h4>
+            <div class="flex-1">
+              <div class="flex justify-between items-start pr-16">
+                <h4 class="font-bold text-slate-800 text-base leading-tight">${m.namaMesin}</h4>
               </div>
-              <div class="flex items-center gap-2 mt-1">
+              <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span class="bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">${m.tipeMesin || '-'}</span>
                 <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant}</p>
               </div>
             </div>
-            <div class="grid grid-cols-3 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100">
-              <div><span class="text-slate-400 block">No Seri:</span> <strong>${m.noSeri}</strong></div>
+            <div class="grid grid-cols-3 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100 mt-auto">
+              <div><span class="text-slate-400 block">No Seri:</span> <strong class="truncate block" title="${m.noSeri}">${m.noSeri}</strong></div>
               <div><span class="text-slate-400 block">Tahun:</span> <strong>${m.tahun}</strong></div>
               <div><span class="text-slate-400 block">Jumlah:</span> <strong class="text-emerald-600">${m.jumlah} Unit</strong></div>
             </div>
           </div>
         `).join('');
       } else if (currentView === 'details') {
-        container.className = "space-y-2";
+        container.className = "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3";
         container.innerHTML = data.map(m => `
-          <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3 overflow-hidden">
+          <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center justify-between gap-3 relative hover:shadow-md transition duration-200 group">
+            <div class="flex items-center gap-3 overflow-hidden pr-12 w-full">
               ${getImageHTML(m.fotoUrl, 'w-12 h-12 object-cover rounded-lg border flex-shrink-0')}
-              <div class="truncate">
+              <div class="truncate w-full">
                 <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin}</h4>
-                <p class="text-[10px] text-slate-500">${m.plant} • <span class="text-blue-500 font-semibold">${m.tipeMesin || '-'}</span></p>
+                <p class="text-[10px] text-slate-500 truncate">${m.plant} • <span class="text-blue-500 font-semibold">${m.tipeMesin || '-'}</span></p>
               </div>
             </div>
-            <div class="flex items-center gap-3 flex-shrink-0">
-              <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">${m.jumlah} Unit</span>
-              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="text-slate-400 hover:text-red-500 p-1.5 transition" title="Hapus Data">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md hidden sm:block">${m.jumlah} Unit</span>
+              <div class="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
+                <button onclick="editDataMesin('${m.id}')" class="text-blue-400 hover:text-blue-600 p-1.5 transition bg-blue-50 rounded-lg" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="text-red-400 hover:text-red-600 p-1.5 transition bg-red-50 rounded-lg" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
+              </div>
             </div>
           </div>
         `).join('');
       } else if (currentView === 'large') {
-        container.className = "grid grid-cols-2 gap-3";
+        container.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4";
         container.innerHTML = data.map(m => `
-          <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col justify-between relative">
-            <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="absolute top-4 right-4 bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition z-10" title="Hapus Data">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
+          <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col justify-between relative group hover:shadow-md transition duration-200">
+            <div class="absolute top-4 right-4 flex gap-1 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
+              <button onclick="editDataMesin('${m.id}')" class="bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
             ${getImageHTML(m.fotoUrl, 'w-full h-28 object-cover rounded-lg border mb-2')}
-            <div>
-              <h4 class="font-bold text-slate-800 text-xs truncate">${m.namaMesin}</h4>
+            <div class="flex flex-col flex-1">
+              <h4 class="font-bold text-slate-800 text-xs truncate pr-2">${m.namaMesin}</h4>
               <p class="text-[9px] text-blue-500 font-bold mb-1 truncate">${m.tipeMesin || '-'}</p>
-              <div class="mt-1 text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg flex justify-between">
-                <span class="truncate pr-1">${m.noSeri}</span>
+              <div class="mt-auto pt-1 text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg flex justify-between items-center">
+                <span class="truncate pr-1" title="${m.noSeri}">${m.noSeri}</span>
                 <strong class="text-emerald-600 flex-shrink-0">${m.jumlah} U</strong>
               </div>
             </div>
@@ -224,10 +227,11 @@
       }
     }
 
-    // Submit Form
     document.getElementById('formMesin').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btnSimpan');
+      const editId = document.getElementById('editId').value;
+      
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> Menyimpan...`;
       btn.disabled = true;
 
@@ -239,23 +243,28 @@
           fotoDataFinal = await kompresiFoto(fotoFile, 800, 800, 0.7);
         }
 
-        await addDoc(collection(db, "mesin"), {
+        const dataPayload = {
           namaMesin: document.getElementById('namaMesin').value,
           tipeMesin: document.getElementById('tipeMesin').value,
           plant: document.getElementById('plant').value,
           tahun: Number(document.getElementById('tahun').value),
           noSeri: document.getElementById('noSeri').value,
-          jumlah: Number(document.getElementById('jumlah').value),
-          fotoUrl: fotoDataFinal, 
-          waktuInput: new Date().toISOString()
-        });
+          jumlah: Number(document.getElementById('jumlah').value)
+        };
+
+        if (editId) {
+          if (fotoDataFinal !== '') dataPayload.fotoUrl = fotoDataFinal;
+          await updateDoc(doc(db, "mesin", editId), dataPayload);
+        } else {
+          dataPayload.fotoUrl = fotoDataFinal;
+          dataPayload.waktuInput = new Date().toISOString();
+          await addDoc(collection(db, "mesin"), dataPayload);
+        }
 
         btn.innerText = "Simpan Data";
         btn.disabled = false;
         
-        window.tutupModal();
-        document.getElementById('formMesin').reset();
-        document.getElementById('imgPreview').classList.add('hidden');
+        tutupModal();
         muatData();
       } catch (err) {
         alert("Terjadi kesalahan: " + err.message);
@@ -263,161 +272,321 @@
         btn.disabled = false;
       }
     });
-
-    window.muatData = muatData;
-    window.renderCards = renderCards;
-    window.hapusDataMesin = hapusDataMesin;
-    window.getListMesin = () => listMesin;
-    
-    muatData();
   </script>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 pb-20">
 
-  <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md flex justify-between items-center">
-    <div>
-      <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>DataBase Mesin Assembly</h1>
-      <p class="text-xs text-slate-400">Dashboard & Cloud System</p>
+  <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md">
+    <div class="max-w-6xl mx-auto flex justify-between items-center w-full">
+      <div>
+        <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Database Mesin</h1>
+        <p class="text-xs text-slate-400">Dashboard & Cloud System</p>
+      </div>
+      <button onclick="bukaModalTambah()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
+        <i class="fa-solid fa-plus"></i> Tambah
+      </button>
     </div>
-    <button onclick="bukaModal()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
-      <i class="fa-solid fa-plus"></i> Tambah
-    </button>
   </header>
 
-  <main class="max-w-md mx-auto p-4">
+  <main class="max-w-6xl mx-auto p-4 md:p-6 lg:p-8">
     
     <!-- DASHBOARD KPI & LOG -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
-      <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white shadow-sm flex flex-col justify-center">
-        <span class="text-[10px] font-semibold opacity-90 tracking-wide uppercase">Total Aset</span>
-        <div class="flex items-end gap-1 mt-1">
-          <span id="kpiTotalItem" class="text-3xl font-bold">0</span>
-          <span class="text-[10px] mb-1.5 opacity-80">Mesin Terdata</span>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white shadow-sm flex flex-col justify-center min-h-[120px]">
+        <span class="text-[10px] md:text-xs font-semibold opacity-90 tracking-wide uppercase">Total Aset Keseluruhan</span>
+        <div class="flex items-end gap-2 mt-1">
+          <span id="kpiTotalItem" class="text-4xl font-bold">0</span>
+          <span class="text-[10px] md:text-xs mb-1.5 opacity-80">Mesin Terdata</span>
         </div>
-        <div class="text-[10px] bg-black/20 px-2 py-1 rounded mt-2 inline-block w-fit font-medium">
-          <i class="fa-solid fa-cubes mr-1"></i><span id="kpiTotalUnit">0</span> Unit Aktual
+        <div class="text-[10px] md:text-xs bg-black/20 px-3 py-1.5 rounded-lg mt-3 inline-block w-fit font-medium">
+          <i class="fa-solid fa-cubes mr-1.5"></i><span id="kpiTotalUnit">0</span> Unit Aktual
         </div>
       </div>
       
-      <div class="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm flex flex-col">
-        <span class="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wide border-b pb-1"><i class="fa-solid fa-clock-rotate-left mr-1"></i>Riwayat Terakhir</span>
-        <div id="logContainer" class="flex-1 flex flex-col justify-center gap-1"></div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[120px]">
+        <span class="text-[10px] md:text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide border-b pb-2"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Riwayat Terakhir</span>
+        <div id="logContainer" class="flex-1 flex flex-col justify-center gap-2"></div>
       </div>
     </div>
 
-    <!-- Toolbar Explorer -->
-    <div class="flex gap-2 mb-4">
-      <div class="relative flex-1">
-        <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari tipe, nama, atau seri..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm">
-        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+    <!-- TOOLBAR PENCARIAN & FILTER -->
+    <div class="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 bg-slate-50 border border-slate-200 p-3 md:p-4 rounded-xl shadow-sm items-center">
+      <div class="flex gap-2 w-full md:w-auto flex-1 items-center">
+        <div class="relative flex-1">
+          <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari mesin, tipe, atau plant..." class="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm transition">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-xs md:text-sm"></i>
+        </div>
+        <button onclick="bukaRekapTipe()" class="bg-blue-50 border border-blue-200 text-blue-600 px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-blue-100 flex items-center justify-center shadow-sm whitespace-nowrap transition">
+          <i class="fa-solid fa-chart-pie mr-1.5"></i> Rekap
+        </button>
       </div>
-      <select id="viewMode" onchange="filterData()" class="bg-white border border-slate-200 text-xs font-semibold rounded-xl px-2.5 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700">
-        <option value="card"> Kartu</option>
-        <option value="details"> Details (List)</option>
-        <option value="large"> Large Icons</option>
-      </select>
+      <div class="flex gap-2 w-full md:w-auto items-center justify-between md:justify-end border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-4 mt-1 md:mt-0">
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <span class="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wide hidden sm:block"><i class="fa-solid fa-arrow-down-a-z mr-1"></i>Sortir:</span>
+          <select id="sortBy" onchange="filterData()" class="flex-1 md:w-44 bg-white border border-slate-200 text-xs md:text-sm font-semibold rounded-xl px-3 py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 cursor-pointer">
+            <option value="terbaru">Terbaru Diinput</option>
+            <option value="nama_asc">Nama (A-Z)</option>
+            <option value="tipe_asc">Tipe (A-Z)</option>
+            <option value="tahun_desc">Tahun (Terbaru)</option>
+            <option value="tahun_asc">Tahun (Terlama)</option>
+            <option value="plant_asc">Lokasi / Plant</option>
+          </select>
+        </div>
+        <select id="viewMode" onchange="filterData()" class="bg-white border border-slate-200 text-xs md:text-sm font-semibold rounded-xl px-3 py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 cursor-pointer">
+          <option value="card">Kartu</option>
+          <option value="details">List</option>
+          <option value="large">Ikon</option>
+        </select>
+      </div>
     </div>
 
-    <div id="cardsContainer" class="space-y-4"></div>
+    <div id="cardsContainer" class="w-full"></div>
   </main>
 
-  <!-- Modal Form Input -->
+  <!-- MODAL FORM INPUT & EDIT -->
   <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
-      <div class="bg-white rounded-2xl max-w-md w-full p-5 text-left shadow-2xl relative my-8">
-        <div class="flex justify-between items-center border-b pb-3 mb-4">
-          <h3 class="font-bold text-slate-800 text-sm">Input Mesin Baru</h3>
-          <button onclick="tutupModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 text-left shadow-2xl relative my-8 border-t-4 border-emerald-500">
+        <div class="flex justify-between items-center border-b pb-4 mb-4">
+          <h3 id="modalTitle" class="font-bold text-slate-800 text-base">Input Mesin Baru</h3>
+          <button onclick="tutupModal()" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
 
-        <form id="formMesin" class="space-y-3 text-xs">
+        <form id="formMesin" class="space-y-4 text-sm">
+          <input type="hidden" id="editId">
+
           <div>
-            <label class="font-semibold text-slate-700 block mb-1">Nama Mesin</label>
-            <input type="text" id="namaMesin" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="font-semibold text-slate-700 block mb-1.5">Nama Mesin</label>
+            <input type="text" id="namaMesin" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1">Tipe Mesin</label>
-            <input type="text" id="tipeMesin" required placeholder="Contoh: Press, Puncher, Vacum, Blow, Hotmelt, Ultrasonic, UV Curing..." class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="font-semibold text-slate-700 block mb-1.5">Tipe Mesin</label>
+            <input type="text" id="tipeMesin" required placeholder="Contoh: Press, Puncher, UV Curing..." class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none uppercase transition">
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="font-semibold text-slate-700 block mb-1">Plant / Lokasi</label>
-              <select id="plant" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+              <label class="font-semibold text-slate-700 block mb-1.5">Plant / Lokasi</label>
+              <select id="plant" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-white cursor-pointer transition">
                 <option value="Assembly Plant Alpha">Assembly Plant Alpha</option>
                 <option value="Assembly Plant Beta">Assembly Plant Beta</option>
                 <option value="Plant 3">Plant 3</option>
               </select>
             </div>
             <div>
-              <label class="font-semibold text-slate-700 block mb-1">Tahun Mesin</label>
-              <input type="number" id="tahun" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="2024">
+              <label class="font-semibold text-slate-700 block mb-1.5">Tahun Mesin</label>
+              <input type="number" id="tahun" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition" placeholder="2024">
             </div>
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1">Nomor Seri</label>
+            <label class="font-semibold text-slate-700 block mb-1.5">Nomor Seri</label>
             <div class="flex gap-2">
-              <input type="text" id="noSeri" required placeholder="Ketik manual atau scan teks foto" class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
-              <!-- Tombol Scanner QR / Barcode / Foto Teks -->
-              <button type="button" onclick="bukaOpsiScan()" class="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 flex items-center justify-center" title="Scan Barcode atau Foto Teks">
-                <i class="fa-solid fa-camera text-base"></i>
+              <input type="text" id="noSeri" required placeholder="Ketik manual atau scan" class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+              <button type="button" onclick="bukaOpsiScan()" class="bg-slate-800 text-white px-4 rounded-xl hover:bg-slate-700 flex items-center justify-center transition">
+                <i class="fa-solid fa-camera text-lg"></i>
               </button>
             </div>
             
-            <!-- Area Kamera QR / Barcode -->
-            <div id="reader" class="hidden mt-2 rounded-lg overflow-hidden border"></div>
+            <div id="reader" class="hidden mt-2 rounded-xl overflow-hidden border"></div>
 
-            <!-- Tombol Pilih Foto Plat Nomor untuk dibaca teks/angkanya (OCR) -->
-            <div id="ocrContainer" class="hidden mt-2 p-2 bg-slate-50 border rounded-lg text-center">
-              <p class="text-[10px] text-slate-500 mb-1">Atau ambil foto plat nomor/teks langsung:</p>
-              <input type="file" id="ocrInput" accept="image/*" capture="environment" onchange="prosesScanTeks(event)" class="text-[10px]">
-              <div id="ocrStatus" class="text-[10px] text-emerald-600 font-semibold mt-1"></div>
+            <div id="ocrContainer" class="hidden mt-2 p-3 bg-slate-50 border rounded-xl text-center">
+              <p class="text-[11px] text-slate-500 mb-2">Atau ambil foto plat nomor/teks langsung:</p>
+              <input type="file" id="ocrInput" accept="image/*" capture="environment" onchange="prosesScanTeks(event)" class="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+              <div id="ocrStatus" class="text-[11px] text-emerald-600 font-semibold mt-2"></div>
             </div>
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1">Jumlah (Unit)</label>
-            <input type="number" id="jumlah" value="1" required class="w-full p-2.5 rounded-lg border text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
+            <label class="font-semibold text-slate-700 block mb-1.5">Jumlah (Unit)</label>
+            <input type="number" id="jumlah" value="1" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1">Foto Mesin (Opsional)</label>
-            <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="previewFoto(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
-            <img id="imgPreview" class="hidden mt-2 w-full h-36 object-cover rounded-lg border">
+            <label class="font-semibold text-slate-700 block mb-1.5">Foto Mesin (Opsional)</label>
+            <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="previewFoto(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer transition">
+            <p class="text-[10px] text-slate-400 mt-1.5 italic">*Biarkan kosong jika tidak ingin mengubah foto lama</p>
+            <img id="imgPreview" class="hidden mt-3 w-full h-40 object-cover rounded-xl border">
           </div>
 
-          <div class="pt-3 flex gap-2">
-            <button type="button" onclick="tutupModal()" class="w-1/2 py-2.5 rounded-xl border font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
-            <button type="submit" id="btnSimpan" class="w-1/2 py-2.5 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md">Simpan Data</button>
+          <div class="pt-4 flex gap-3">
+            <button type="button" onclick="tutupModal()" class="w-1/2 py-3 rounded-xl border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50 transition">Batal</button>
+            <button type="submit" id="btnSimpan" class="w-1/2 py-3 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-600 shadow-md transition">Simpan Data</button>
           </div>
         </form>
       </div>
     </div>
   </div>
 
+  <!-- MODAL REKAP TIPE MESIN -->
+  <div id="modalRekap" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
+    <div class="min-h-screen px-4 text-center flex items-center justify-center">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-left shadow-2xl relative border-t-4 border-blue-500 my-8">
+        <div class="flex justify-between items-center border-b pb-4 mb-4">
+          <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-list-ul text-blue-500 mr-2"></i>Rincian Tipe Mesin</h3>
+          <button onclick="tutupRekap()" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+        </div>
+        
+        <div class="max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+          <ul id="listRekapTipe" class="divide-y divide-slate-100 flex flex-col gap-2"></ul>
+        </div>
+
+        <button onclick="tutupRekap()" class="w-full py-3 mt-5 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 shadow-sm transition">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+
   <script>
     let html5QrCode = null;
 
+    // FUNGSI UTAMA FILTER & SORTING (DIPERBARUI DENGAN LOCAL STORAGE)
     function filterData() {
       const q = document.getElementById('searchInput').value.toLowerCase();
+      const sortBy = document.getElementById('sortBy').value;
+      const viewMode = document.getElementById('viewMode').value;
+      
+      // Simpan preferensi pengguna di memori browser
+      localStorage.setItem('preferensiTampilan', viewMode);
+      localStorage.setItem('preferensiUrutan', sortBy);
+
       const list = window.getListMesin();
-      const filtered = list.filter(m => 
+      
+      let filtered = list.filter(m => 
         m.namaMesin.toLowerCase().includes(q) || 
         m.noSeri.toLowerCase().includes(q) || 
         m.plant.toLowerCase().includes(q) ||
         (m.tipeMesin && m.tipeMesin.toLowerCase().includes(q))
       );
+
+      filtered.sort((a, b) => {
+        if (sortBy === 'nama_asc') {
+          return a.namaMesin.localeCompare(b.namaMesin);
+        } else if (sortBy === 'tipe_asc') {
+          return (a.tipeMesin || '').localeCompare(b.tipeMesin || '');
+        } else if (sortBy === 'tahun_desc') {
+          return (Number(b.tahun) || 0) - (Number(a.tahun) || 0);
+        } else if (sortBy === 'tahun_asc') {
+          return (Number(a.tahun) || 0) - (Number(b.tahun) || 0);
+        } else if (sortBy === 'plant_asc') {
+          return (a.plant || '').localeCompare(b.plant || '');
+        } else {
+          return new Date(b.waktuInput || 0).getTime() - new Date(a.waktuInput || 0).getTime();
+        }
+      });
+
       window.renderCards(filtered);
     }
 
-    function bukaModal() { document.getElementById('modalForm').classList.remove('hidden'); }
+    // Inisialisasi: Muat preferensi saat halaman dibuka/di-refresh
+    document.addEventListener("DOMContentLoaded", () => {
+      const savedView = localStorage.getItem('preferensiTampilan');
+      if (savedView) document.getElementById('viewMode').value = savedView;
+
+      const savedSort = localStorage.getItem('preferensiUrutan');
+      if (savedSort) document.getElementById('sortBy').value = savedSort;
+    });
+
+    function bukaModalTambah() { 
+      document.getElementById('formMesin').reset();
+      document.getElementById('editId').value = "";
+      document.getElementById('modalTitle').innerText = "Input Mesin Baru";
+      document.getElementById('imgPreview').classList.add('hidden');
+      document.getElementById('imgPreview').src = "";
+      document.getElementById('modalForm').classList.remove('hidden'); 
+    }
+
+    function editDataMesin(id) {
+      const data = window.getListMesin().find(m => m.id === id);
+      if (!data) return;
+
+      document.getElementById('editId').value = data.id;
+      document.getElementById('namaMesin').value = data.namaMesin || "";
+      document.getElementById('tipeMesin').value = data.tipeMesin || "";
+      document.getElementById('plant').value = data.plant || "";
+      document.getElementById('tahun').value = data.tahun || "";
+      document.getElementById('noSeri').value = data.noSeri || "";
+      document.getElementById('jumlah').value = data.jumlah || 1;
+
+      const imgP = document.getElementById('imgPreview');
+      if (data.fotoUrl && data.fotoUrl.length > 50) {
+        imgP.src = data.fotoUrl;
+        imgP.classList.remove('hidden');
+      } else {
+        imgP.src = "";
+        imgP.classList.add('hidden');
+      }
+
+      document.getElementById('modalTitle').innerText = "Edit Data Mesin";
+      document.getElementById('modalForm').classList.remove('hidden');
+    }
+
     function tutupModal() { 
       document.getElementById('modalForm').classList.add('hidden'); 
       if (html5QrCode) html5QrCode.stop();
       document.getElementById('reader').classList.add('hidden');
       document.getElementById('ocrContainer').classList.add('hidden');
+    }
+
+    function bukaRekapTipe() {
+      const rekap = {};
+      const list = window.getListMesin();
+      
+      list.forEach(m => {
+        const tipe = m.tipeMesin ? m.tipeMesin.trim().toUpperCase() : 'LAIN-LAIN';
+        if (!rekap[tipe]) {
+          rekap[tipe] = { totalUnit: 0, mesins: [] };
+        }
+        rekap[tipe].totalUnit += (Number(m.jumlah) || 1);
+        rekap[tipe].mesins.push(m);
+      });
+
+      const container = document.getElementById('listRekapTipe');
+      let html = '';
+      
+      if (Object.keys(rekap).length === 0) {
+        html = '<li class="py-6 text-center text-sm text-slate-400">Data mesin masih kosong.</li>';
+      } else {
+        const sortedKeys = Object.keys(rekap).sort();
+        sortedKeys.forEach(tipe => {
+          html += `
+            <li class="pt-2 pb-4 border-b border-slate-100 last:border-0">
+              <div class="flex justify-between items-center mb-2.5">
+                <span class="font-bold text-slate-700 text-sm">${tipe}</span>
+                <span class="bg-blue-50 border border-blue-100 text-blue-600 px-2.5 py-1 rounded text-xs font-bold">${rekap[tipe].totalUnit} Unit</span>
+              </div>
+              <div class="flex flex-col gap-2 pl-2.5 border-l-2 border-slate-200 ml-1">
+          `;
+          
+          rekap[tipe].mesins.forEach(mesin => {
+            html += `
+                <div class="bg-slate-50 p-2.5 rounded-lg text-xs leading-relaxed border border-slate-100 hover:border-slate-300 transition">
+                  <div class="font-bold text-slate-800">${mesin.namaMesin}</div>
+                  <div class="text-slate-500 flex items-center justify-between mt-1">
+                    <span class="truncate pr-2"><i class="fa-solid fa-location-dot text-slate-400 mr-1.5"></i>${mesin.plant || '-'}</span>
+                    <span class="bg-slate-200 px-2 py-0.5 rounded font-medium text-slate-600">Thn: ${mesin.tahun || '-'}</span>
+                  </div>
+                </div>
+            `;
+          });
+
+          html += `</div></li>`;
+        });
+      }
+      
+      container.innerHTML = html;
+      document.getElementById('modalRekap').classList.remove('hidden');
+    }
+
+    function tutupRekap() {
+      document.getElementById('modalRekap').classList.add('hidden');
     }
 
     function previewFoto(e) {
@@ -433,12 +602,10 @@
       }
     }
 
-    // Membuka menu pemindaian (QR/Barcode atau Scan Teks Foto)
     function bukaOpsiScan() {
       const readerDiv = document.getElementById('reader');
       const ocrDiv = document.getElementById('ocrContainer');
       
-      // Toggle tampilkan QR scanner & opsi OCR foto teks
       if (readerDiv.classList.contains('hidden')) {
         readerDiv.classList.remove('hidden');
         ocrDiv.classList.remove('hidden');
@@ -463,19 +630,15 @@
       }
     }
 
-    // Fungsi Pembaca Teks/Angka dari Foto (OCR)
     async function prosesScanTeks(event) {
       const file = event.target.files[0];
       if (!file) return;
 
       const statusDiv = document.getElementById('ocrStatus');
-      statusDiv.innerText = "Membaca teks dari foto... Mohon tunggu sebentar.";
+      statusDiv.innerText = "Membaca teks dari foto... Mohon tunggu.";
 
       try {
-        const result = await Tesseract.recognize(file, 'eng', {
-          logger: m => console.log(m)
-        });
-        
+        const result = await Tesseract.recognize(file, 'eng');
         let hasilTeks = result.data.text.trim().replace(/\s+/g, ' ');
         if (hasilTeks) {
           document.getElementById('noSeri').value = hasilTeks;
@@ -486,20 +649,31 @@
             if (html5QrCode) html5QrCode.stop();
           }, 1500);
         } else {
-          statusDiv.innerText = "Teks tidak terbaca jelas, coba foto ulang lebih dekat.";
+          statusDiv.innerText = "Teks tidak terbaca jelas.";
         }
       } catch (err) {
-        statusDiv.innerText = "Gagal memproses teks gambar.";
+        statusDiv.innerText = "Gagal memproses gambar.";
         console.error(err);
       }
     }
 
-    window.bukaModal = bukaModal;
+    window.bukaModalTambah = bukaModalTambah;
+    window.editDataMesin = editDataMesin;
     window.tutupModal = tutupModal;
+    window.bukaRekapTipe = bukaRekapTipe;
+    window.tutupRekap = tutupRekap;
     window.previewFoto = previewFoto;
     window.bukaOpsiScan = bukaOpsiScan;
     window.prosesScanTeks = prosesScanTeks;
     window.filterData = filterData;
+    
+    window.muatData = muatData;
+    window.renderCards = renderCards;
+    window.hapusDataMesin = hapusDataMesin;
+    window.getListMesin = () => listMesin;
+    
+    // Mulai inisialisasi aplikasi
+    muatData();
   </script>
 </body>
 </html>
