@@ -33,7 +33,6 @@
 
     let listMesin = [];
 
-    // Kompresi Foto
     function kompresiFoto(file, maxWidth, maxHeight, quality) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -71,7 +70,6 @@
       });
     }
 
-    // Format Tanggal
     function formatTanggalDetail(isoString) {
       if(!isoString) return "-";
       const date = new Date(isoString);
@@ -83,7 +81,7 @@
       return `${hari}, ${tgl} ${bln} - ${jam}:${mnt} WIB`;
     }
 
-    // Muat Data
+    // PEMBARUAN: Isolasi Try-Catch untuk melokalisir sumber error
     async function muatData() {
       const container = document.getElementById('cardsContainer');
       container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm w-full col-span-full"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Memuat data dari Cloud...</div>`;
@@ -99,10 +97,18 @@
         
         renderKPI(listMesin);
         renderLog(listMesin);
+      } catch (err) {
+        console.error("Firebase Error:", err);
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Gagal memuat data dari database. Periksa koneksi internet Anda.</div>`;
+        return; // Hentikan fungsi jika Firebase gagal
+      }
+
+      // Blok eksekusi visual dipisah
+      try {
         filterData(); 
       } catch (err) {
-        console.error(err);
-        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Gagal memuat data dari database. Periksa koneksi internet Anda.</div>`;
+        console.error("Render Error:", err);
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Terjadi kesalahan pada struktur data Anda saat memproses tampilan kartu.</div>`;
       }
     }
 
@@ -290,7 +296,6 @@
 
   <main class="max-w-6xl mx-auto p-4 md:p-6 lg:p-8">
     
-    <!-- DASHBOARD KPI & LOG -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white shadow-sm flex flex-col justify-center min-h-[120px]">
         <span class="text-[10px] md:text-xs font-semibold opacity-90 tracking-wide uppercase">Total Aset Keseluruhan</span>
@@ -309,7 +314,6 @@
       </div>
     </div>
 
-    <!-- TOOLBAR PENCARIAN & FILTER -->
     <div class="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 bg-slate-50 border border-slate-200 p-3 md:p-4 rounded-xl shadow-sm items-center">
       <div class="flex gap-2 w-full md:w-auto flex-1 items-center">
         <div class="relative flex-1">
@@ -343,7 +347,6 @@
     <div id="cardsContainer" class="w-full"></div>
   </main>
 
-  <!-- MODAL FORM INPUT & EDIT -->
   <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
       <div class="bg-white rounded-2xl max-w-md w-full p-6 text-left shadow-2xl relative my-8 border-t-4 border-emerald-500">
@@ -419,7 +422,6 @@
     </div>
   </div>
 
-  <!-- MODAL REKAP TIPE MESIN -->
   <div id="modalRekap" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
       <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-left shadow-2xl relative border-t-4 border-blue-500 my-8">
@@ -447,7 +449,7 @@
   <script>
     let html5QrCode = null;
 
-    // FUNGSI UTAMA FILTER & SORTING (Dilindungi dari error data kosong)
+    // PEMBARUAN: Penambahan Konversi Tipe Data Paksa (String Casting)
     function filterData() {
       const searchInput = document.getElementById('searchInput');
       const sortBySelect = document.getElementById('sortBy');
@@ -467,24 +469,25 @@
       const list = window.getListMesin() || [];
       
       let filtered = list.filter(m => {
-        const nama = (m.namaMesin || '').toLowerCase();
-        const seri = (m.noSeri || '').toLowerCase();
-        const plant = (m.plant || '').toLowerCase();
-        const tipe = (m.tipeMesin || '').toLowerCase();
+        // String() memastikan semua format aman diproses menjadi teks
+        const nama = String(m.namaMesin || '').toLowerCase();
+        const seri = String(m.noSeri || '').toLowerCase();
+        const plant = String(m.plant || '').toLowerCase();
+        const tipe = String(m.tipeMesin || '').toLowerCase();
         return nama.includes(q) || seri.includes(q) || plant.includes(q) || tipe.includes(q);
       });
 
       filtered.sort((a, b) => {
         if (sortBy === 'nama_asc') {
-          return (a.namaMesin || '').localeCompare(b.namaMesin || '');
+          return String(a.namaMesin || '').localeCompare(String(b.namaMesin || ''));
         } else if (sortBy === 'tipe_asc') {
-          return (a.tipeMesin || '').localeCompare(b.tipeMesin || '');
+          return String(a.tipeMesin || '').localeCompare(String(b.tipeMesin || ''));
         } else if (sortBy === 'tahun_desc') {
           return (Number(b.tahun) || 0) - (Number(a.tahun) || 0);
         } else if (sortBy === 'tahun_asc') {
           return (Number(a.tahun) || 0) - (Number(b.tahun) || 0);
         } else if (sortBy === 'plant_asc') {
-          return (a.plant || '').localeCompare(b.plant || '');
+          return String(a.plant || '').localeCompare(String(b.plant || ''));
         } else {
           return new Date(b.waktuInput || 0).getTime() - new Date(a.waktuInput || 0).getTime();
         }
@@ -493,7 +496,6 @@
       window.renderCards(filtered);
     }
 
-    // Inisialisasi Preferensi Tersimpan
     document.addEventListener("DOMContentLoaded", () => {
       try {
         const savedView = localStorage.getItem('preferensiTampilan');
