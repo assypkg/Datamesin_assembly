@@ -33,6 +33,7 @@
 
     let listMesin = [];
 
+    // Kompresi Foto
     function kompresiFoto(file, maxWidth, maxHeight, quality) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -70,6 +71,7 @@
       });
     }
 
+    // Format Tanggal
     function formatTanggalDetail(isoString) {
       if(!isoString) return "-";
       const date = new Date(isoString);
@@ -81,7 +83,7 @@
       return `${hari}, ${tgl} ${bln} - ${jam}:${mnt} WIB`;
     }
 
-    // PEMBARUAN: Isolasi Try-Catch untuk melokalisir sumber error
+    // Muat Data
     async function muatData() {
       const container = document.getElementById('cardsContainer');
       container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm w-full col-span-full"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Memuat data dari Cloud...</div>`;
@@ -97,18 +99,10 @@
         
         renderKPI(listMesin);
         renderLog(listMesin);
-      } catch (err) {
-        console.error("Firebase Error:", err);
-        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Gagal memuat data dari database. Periksa koneksi internet Anda.</div>`;
-        return; // Hentikan fungsi jika Firebase gagal
-      }
-
-      // Blok eksekusi visual dipisah
-      try {
         filterData(); 
       } catch (err) {
-        console.error("Render Error:", err);
-        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Terjadi kesalahan pada struktur data Anda saat memproses tampilan kartu.</div>`;
+        console.error(err);
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Gagal memuat data. Periksa koneksi internet Anda.</div>`;
       }
     }
 
@@ -129,7 +123,7 @@
 
       container.innerHTML = latest3.map(m => `
         <div class="flex flex-col border-l-2 border-emerald-400 pl-2 mb-1.5 last:mb-0 w-full">
-          <span class="text-[10px] font-bold text-slate-700 truncate">${m.namaMesin || 'Tanpa Nama'}</span>
+          <span class="text-[10px] font-bold text-slate-700 truncate">${m.namaMesin}</span>
           <span class="text-[9px] text-slate-500">${formatTanggalDetail(m.waktuInput)}</span>
         </div>
       `).join('');
@@ -162,6 +156,7 @@
           : `<div class="${kelas} bg-slate-100 flex items-center justify-center text-slate-400 text-xs"><i class="fa-solid fa-image"></i></div>`;
       };
 
+      // PERUBAHAN UTAMA: Layout Grid Responsif untuk Desktop & Mobile
       if (currentView === 'card') {
         container.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
         container.innerHTML = data.map(m => `
@@ -170,24 +165,24 @@
               <button onclick="editDataMesin('${m.id}')" class="bg-blue-500/90 hover:bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Edit Data">
                 <i class="fa-solid fa-pen"></i>
               </button>
-              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin || 'Mesin'}')" class="bg-red-500/90 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Hapus Data">
+              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500/90 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Hapus Data">
                 <i class="fa-solid fa-trash-can"></i>
               </button>
             </div>
             ${getImageHTML(m.fotoUrl, 'w-full h-48 object-cover rounded-xl border')}
             <div class="flex-1">
               <div class="flex justify-between items-start pr-16">
-                <h4 class="font-bold text-slate-800 text-base leading-tight">${m.namaMesin || '-'}</h4>
+                <h4 class="font-bold text-slate-800 text-base leading-tight">${m.namaMesin}</h4>
               </div>
               <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span class="bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">${m.tipeMesin || '-'}</span>
-                <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant || '-'}</p>
+                <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant}</p>
               </div>
             </div>
             <div class="grid grid-cols-3 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100 mt-auto">
-              <div><span class="text-slate-400 block">No Seri:</span> <strong class="truncate block" title="${m.noSeri || ''}">${m.noSeri || '-'}</strong></div>
-              <div><span class="text-slate-400 block">Tahun:</span> <strong>${m.tahun || '-'}</strong></div>
-              <div><span class="text-slate-400 block">Jumlah:</span> <strong class="text-emerald-600">${m.jumlah || 1} Unit</strong></div>
+              <div><span class="text-slate-400 block">No Seri:</span> <strong class="truncate block" title="${m.noSeri}">${m.noSeri}</strong></div>
+              <div><span class="text-slate-400 block">Tahun:</span> <strong>${m.tahun}</strong></div>
+              <div><span class="text-slate-400 block">Jumlah:</span> <strong class="text-emerald-600">${m.jumlah} Unit</strong></div>
             </div>
           </div>
         `).join('');
@@ -198,15 +193,15 @@
             <div class="flex items-center gap-3 overflow-hidden pr-12 w-full">
               ${getImageHTML(m.fotoUrl, 'w-12 h-12 object-cover rounded-lg border flex-shrink-0')}
               <div class="truncate w-full">
-                <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin || '-'}</h4>
-                <p class="text-[10px] text-slate-500 truncate">${m.plant || '-'} • <span class="text-blue-500 font-semibold">${m.tipeMesin || '-'}</span></p>
+                <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin}</h4>
+                <p class="text-[10px] text-slate-500 truncate">${m.plant} • <span class="text-blue-500 font-semibold">${m.tipeMesin || '-'}</span></p>
               </div>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
-              <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md hidden sm:block">${m.jumlah || 1} Unit</span>
+              <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md hidden sm:block">${m.jumlah} Unit</span>
               <div class="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
                 <button onclick="editDataMesin('${m.id}')" class="text-blue-400 hover:text-blue-600 p-1.5 transition bg-blue-50 rounded-lg" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin || 'Mesin'}')" class="text-red-400 hover:text-red-600 p-1.5 transition bg-red-50 rounded-lg" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
+                <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="text-red-400 hover:text-red-600 p-1.5 transition bg-red-50 rounded-lg" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
               </div>
             </div>
           </div>
@@ -217,15 +212,15 @@
           <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col justify-between relative group hover:shadow-md transition duration-200">
             <div class="absolute top-4 right-4 flex gap-1 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
               <button onclick="editDataMesin('${m.id}')" class="bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
-              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin || 'Mesin'}')" class="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
+              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
             </div>
             ${getImageHTML(m.fotoUrl, 'w-full h-28 object-cover rounded-lg border mb-2')}
             <div class="flex flex-col flex-1">
-              <h4 class="font-bold text-slate-800 text-xs truncate pr-2">${m.namaMesin || '-'}</h4>
+              <h4 class="font-bold text-slate-800 text-xs truncate pr-2">${m.namaMesin}</h4>
               <p class="text-[9px] text-blue-500 font-bold mb-1 truncate">${m.tipeMesin || '-'}</p>
               <div class="mt-auto pt-1 text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg flex justify-between items-center">
-                <span class="truncate pr-1" title="${m.noSeri || ''}">${m.noSeri || '-'}</span>
-                <strong class="text-emerald-600 flex-shrink-0">${m.jumlah || 1} U</strong>
+                <span class="truncate pr-1" title="${m.noSeri}">${m.noSeri}</span>
+                <strong class="text-emerald-600 flex-shrink-0">${m.jumlah} U</strong>
               </div>
             </div>
           </div>
@@ -278,14 +273,22 @@
         btn.disabled = false;
       }
     });
+
+    window.muatData = muatData;
+    window.renderCards = renderCards;
+    window.hapusDataMesin = hapusDataMesin;
+    window.getListMesin = () => listMesin;
+    
+    muatData();
   </script>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 pb-20">
 
   <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md">
+    <!-- Diperlebar menggunakan max-w-6xl -->
     <div class="max-w-6xl mx-auto flex justify-between items-center w-full">
       <div>
-        <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Database Mesin</h1>
+        <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Master Mesin</h1>
         <p class="text-xs text-slate-400">Dashboard & Cloud System</p>
       </div>
       <button onclick="bukaModalTambah()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
@@ -294,8 +297,11 @@
     </div>
   </header>
 
+  <!-- Diperlebar menggunakan max-w-6xl untuk desktop -->
   <main class="max-w-6xl mx-auto p-4 md:p-6 lg:p-8">
     
+    <!-- DASHBOARD KPI & LOG -->
+    <!-- Pada desktop menjadi 2 kolom proporsional -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white shadow-sm flex flex-col justify-center min-h-[120px]">
         <span class="text-[10px] md:text-xs font-semibold opacity-90 tracking-wide uppercase">Total Aset Keseluruhan</span>
@@ -314,6 +320,7 @@
       </div>
     </div>
 
+    <!-- TOOLBAR PENCARIAN & FILTER -->
     <div class="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 bg-slate-50 border border-slate-200 p-3 md:p-4 rounded-xl shadow-sm items-center">
       <div class="flex gap-2 w-full md:w-auto flex-1 items-center">
         <div class="relative flex-1">
@@ -347,6 +354,7 @@
     <div id="cardsContainer" class="w-full"></div>
   </main>
 
+  <!-- MODAL FORM INPUT & EDIT (Tetap Max-w-md agar tidak memanjang aneh di desktop) -->
   <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
       <div class="bg-white rounded-2xl max-w-md w-full p-6 text-left shadow-2xl relative my-8 border-t-4 border-emerald-500">
@@ -422,6 +430,7 @@
     </div>
   </div>
 
+  <!-- MODAL REKAP TIPE MESIN (Tetap Max-w-sm) -->
   <div id="modalRekap" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
     <div class="min-h-screen px-4 text-center flex items-center justify-center">
       <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-left shadow-2xl relative border-t-4 border-blue-500 my-8">
@@ -449,45 +458,30 @@
   <script>
     let html5QrCode = null;
 
-    // PEMBARUAN: Penambahan Konversi Tipe Data Paksa (String Casting)
+    // FUNGSI UTAMA FILTER & SORTING
     function filterData() {
-      const searchInput = document.getElementById('searchInput');
-      const sortBySelect = document.getElementById('sortBy');
-      const viewModeSelect = document.getElementById('viewMode');
-
-      const q = searchInput ? searchInput.value.toLowerCase() : '';
-      const sortBy = sortBySelect ? sortBySelect.value : 'terbaru';
-      const viewMode = viewModeSelect ? viewModeSelect.value : 'card';
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const sortBy = document.getElementById('sortBy').value;
+      const list = window.getListMesin();
       
-      try {
-        localStorage.setItem('preferensiTampilan', viewMode);
-        localStorage.setItem('preferensiUrutan', sortBy);
-      } catch (e) {
-        console.warn("Local storage diblokir.");
-      }
-
-      const list = window.getListMesin() || [];
-      
-      let filtered = list.filter(m => {
-        // String() memastikan semua format aman diproses menjadi teks
-        const nama = String(m.namaMesin || '').toLowerCase();
-        const seri = String(m.noSeri || '').toLowerCase();
-        const plant = String(m.plant || '').toLowerCase();
-        const tipe = String(m.tipeMesin || '').toLowerCase();
-        return nama.includes(q) || seri.includes(q) || plant.includes(q) || tipe.includes(q);
-      });
+      let filtered = list.filter(m => 
+        m.namaMesin.toLowerCase().includes(q) || 
+        m.noSeri.toLowerCase().includes(q) || 
+        m.plant.toLowerCase().includes(q) ||
+        (m.tipeMesin && m.tipeMesin.toLowerCase().includes(q))
+      );
 
       filtered.sort((a, b) => {
         if (sortBy === 'nama_asc') {
-          return String(a.namaMesin || '').localeCompare(String(b.namaMesin || ''));
+          return a.namaMesin.localeCompare(b.namaMesin);
         } else if (sortBy === 'tipe_asc') {
-          return String(a.tipeMesin || '').localeCompare(String(b.tipeMesin || ''));
+          return (a.tipeMesin || '').localeCompare(b.tipeMesin || '');
         } else if (sortBy === 'tahun_desc') {
           return (Number(b.tahun) || 0) - (Number(a.tahun) || 0);
         } else if (sortBy === 'tahun_asc') {
           return (Number(a.tahun) || 0) - (Number(b.tahun) || 0);
         } else if (sortBy === 'plant_asc') {
-          return String(a.plant || '').localeCompare(String(b.plant || ''));
+          return (a.plant || '').localeCompare(b.plant || '');
         } else {
           return new Date(b.waktuInput || 0).getTime() - new Date(a.waktuInput || 0).getTime();
         }
@@ -495,22 +489,6 @@
 
       window.renderCards(filtered);
     }
-
-    document.addEventListener("DOMContentLoaded", () => {
-      try {
-        const savedView = localStorage.getItem('preferensiTampilan');
-        if (savedView && document.getElementById('viewMode')) {
-          document.getElementById('viewMode').value = savedView;
-        }
-
-        const savedSort = localStorage.getItem('preferensiUrutan');
-        if (savedSort && document.getElementById('sortBy')) {
-          document.getElementById('sortBy').value = savedSort;
-        }
-      } catch (e) {
-        console.warn("Gagal memuat preferensi tersimpan.");
-      }
-    });
 
     function bukaModalTambah() { 
       document.getElementById('formMesin').reset();
@@ -586,7 +564,7 @@
           rekap[tipe].mesins.forEach(mesin => {
             html += `
                 <div class="bg-slate-50 p-2.5 rounded-lg text-xs leading-relaxed border border-slate-100 hover:border-slate-300 transition">
-                  <div class="font-bold text-slate-800">${mesin.namaMesin || '-'}</div>
+                  <div class="font-bold text-slate-800">${mesin.namaMesin}</div>
                   <div class="text-slate-500 flex items-center justify-between mt-1">
                     <span class="truncate pr-2"><i class="fa-solid fa-location-dot text-slate-400 mr-1.5"></i>${mesin.plant || '-'}</span>
                     <span class="bg-slate-200 px-2 py-0.5 rounded font-medium text-slate-600">Thn: ${mesin.tahun || '-'}</span>
@@ -684,13 +662,6 @@
     window.bukaOpsiScan = bukaOpsiScan;
     window.prosesScanTeks = prosesScanTeks;
     window.filterData = filterData;
-    
-    window.muatData = muatData;
-    window.renderCards = renderCards;
-    window.hapusDataMesin = hapusDataMesin;
-    window.getListMesin = () => listMesin;
-    
-    muatData();
   </script>
 </body>
 </html>
