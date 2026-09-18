@@ -13,6 +13,10 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
+  <!-- jsPDF & AutoTable untuk Ekspor Laporan -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -99,10 +103,11 @@
         
         renderKPI(listMesin);
         renderLog(listMesin);
+        renderRingkasanTipe(listMesin); 
         filterData(); 
       } catch (err) {
         console.error(err);
-        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full">Gagal memuat data. Periksa koneksi internet Anda.</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-red-500 text-sm w-full col-span-full bg-white rounded-2xl border border-slate-200">Gagal memuat data. Periksa koneksi internet Anda.</div>`;
       }
     }
 
@@ -129,6 +134,39 @@
       `).join('');
     }
 
+    // RENDER RINGKASAN TIPE MESIN DI DASHBOARD
+    function renderRingkasanTipe(data) {
+      const rekap = {};
+      data.forEach(m => {
+        const tipe = m.tipeMesin ? m.tipeMesin.trim().toUpperCase() : 'TANPA TIPE';
+        if (!rekap[tipe]) rekap[tipe] = { total: 0, items: [] };
+        rekap[tipe].total += (Number(m.jumlah) || 0);
+        rekap[tipe].items.push(m);
+      });
+      
+      window.currentRekapTipe = rekap; 
+
+      const container = document.getElementById('ringkasanContainer');
+      
+      if (Object.keys(rekap).length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center text-xs text-slate-400 py-4">Belum ada data tipe mesin.</div>`;
+        return;
+      }
+
+      let html = '';
+      Object.keys(rekap).sort().forEach(tipe => {
+        html += `
+          <div onclick="bukaPopUpNamaMesin('${tipe}')" class="bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 p-3 rounded-xl cursor-pointer transition duration-200 flex justify-between items-center shadow-sm group">
+            <span class="font-bold text-slate-700 group-hover:text-blue-800 text-xs uppercase truncate pr-4">${tipe}</span>
+            <span class="bg-white border border-slate-200 group-hover:border-blue-200 text-emerald-600 px-3 py-1.5 rounded-lg text-[10px] font-extrabold shadow-sm whitespace-nowrap flex items-center gap-1.5">
+              ${rekap[tipe].total} Unit <i class="fa-solid fa-chevron-right text-slate-400"></i>
+            </span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
     async function hapusDataMesin(id, nama) {
       if (confirm(`Hapus data mesin "${nama}" secara permanen?`)) {
         try {
@@ -142,93 +180,100 @@
 
     function renderCards(data) {
       const container = document.getElementById('cardsContainer');
-      const currentView = document.getElementById('viewMode').value;
 
       if (data.length === 0) {
-        container.className = "w-full";
-        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm w-full col-span-full">Data tidak ditemukan.</div>`;
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm w-full bg-white rounded-2xl border border-slate-200 shadow-sm">Data tidak ditemukan.</div>`;
         return;
       }
 
-      const getImageHTML = (fotoUrl, kelas) => {
-        return (fotoUrl && fotoUrl.length > 50) 
-          ? `<img src="${fotoUrl}" class="${kelas}">` 
-          : `<div class="${kelas} bg-slate-100 flex items-center justify-center text-slate-400 text-xs"><i class="fa-solid fa-image"></i></div>`;
-      };
+      let html = '';
 
-      // PERUBAHAN UTAMA: Layout Grid Responsif untuk Desktop & Mobile
-      if (currentView === 'card') {
-        container.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4";
-        container.innerHTML = data.map(m => `
-          <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3 relative group flex flex-col justify-between hover:shadow-md transition duration-200">
-            <div class="absolute top-4 right-4 flex gap-1.5 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
-              <button onclick="editDataMesin('${m.id}')" class="bg-blue-500/90 hover:bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Edit Data">
-                <i class="fa-solid fa-pen"></i>
-              </button>
-              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500/90 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-[10px] shadow-md transition" title="Hapus Data">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
-            </div>
-            ${getImageHTML(m.fotoUrl, 'w-full h-48 object-cover rounded-xl border')}
-            <div class="flex-1">
-              <div class="flex justify-between items-start pr-16">
-                <h4 class="font-bold text-slate-800 text-base leading-tight">${m.namaMesin}</h4>
+      // TAMPILAN TABEL UNTUK DESKTOP / PC (Dilengkapi Nomor Urut)
+      html += `
+        <div class="hidden md:block w-full overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200">
+          <table class="w-full text-left border-collapse whitespace-nowrap min-w-max">
+            <thead>
+              <tr class="bg-blue-950 text-white text-xs uppercase tracking-wide">
+                <th class="px-4 py-3.5 font-semibold text-center w-12">No</th>
+                <th class="px-4 py-3.5 font-semibold">Tipe Mesin</th>
+                <th class="px-4 py-3.5 font-semibold">Nama Mesin</th>
+                <th class="px-4 py-3.5 font-semibold">Model</th>
+                <th class="px-4 py-3.5 font-semibold">No. Seri</th>
+                <th class="px-4 py-3.5 font-semibold">Tahun</th>
+                <th class="px-4 py-3.5 font-semibold">Keterangan</th>
+                <th class="px-4 py-3.5 font-semibold text-center">Jumlah</th>
+                <th class="px-4 py-3.5 font-semibold">Lokasi</th>
+                <th class="px-4 py-3.5 font-semibold text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody class="text-sm divide-y divide-slate-100">
+      `;
+
+      data.forEach((m, index) => {
+        html += `
+          <tr class="hover:bg-slate-50 transition duration-150 group">
+            <td class="px-4 py-3 text-center font-bold text-slate-400 text-xs">${index + 1}</td>
+            <td class="px-4 py-3"><span class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded uppercase">${m.tipeMesin || '-'}</span></td>
+            <td class="px-4 py-3 font-bold text-slate-800 flex items-center gap-2">
+              ${(m.fotoUrl && m.fotoUrl.length > 50) ? `<img src="${m.fotoUrl}" class="w-8 h-8 rounded object-cover border">` : ''}
+              ${m.namaMesin}
+            </td>
+            <td class="px-4 py-3 text-slate-600">${m.modelMesin || '-'}</td>
+            <td class="px-4 py-3 font-mono text-xs text-slate-500">${m.noSeri}</td>
+            <td class="px-4 py-3 text-slate-600 font-medium">${m.tahun || '-'}</td>
+            <td class="px-4 py-3 text-slate-500 text-xs max-w-xs truncate" title="${m.keterangan || '-'}">${m.keterangan || '-'}</td>
+            <td class="px-4 py-3 text-center font-bold text-emerald-700">${m.jumlah} Unit</td>
+            <td class="px-4 py-3 text-slate-600 text-xs"><i class="fa-solid fa-location-dot text-slate-400 mr-1.5"></i>${m.plant}</td>
+            <td class="px-4 py-3 text-center">
+              <div class="flex items-center justify-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
+                <button onclick="editDataMesin('${m.id}')" class="text-blue-500 hover:text-blue-700 p-1.5 transition bg-blue-50 hover:bg-blue-100 rounded-lg" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="text-red-400 hover:text-red-600 p-1.5 transition bg-red-50 hover:bg-red-100 rounded-lg" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
               </div>
-              <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span class="bg-blue-50 text-blue-600 border border-blue-100 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">${m.tipeMesin || '-'}</span>
-                <p class="text-xs text-slate-500"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${m.plant}</p>
+            </td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table></div>`;
+
+      // TAMPILAN KARTU VERTIKAL UNTUK HP (Dilengkapi Nomor Urut)
+      html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:hidden">`;
+      data.forEach((m, index) => {
+        html += `
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 relative group flex flex-col">
+            <div class="flex justify-between items-start mb-3">
+              <div class="flex items-center gap-2">
+                <span class="bg-slate-100 text-slate-600 text-[10px] font-extrabold px-2 py-0.5 rounded-md">#${index + 1}</span>
+                <span class="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded uppercase break-words max-w-[150px]">${m.tipeMesin || '-'}</span>
+              </div>
+              <div class="flex gap-1.5">
+                <button onclick="editDataMesin('${m.id}')" class="bg-blue-500 hover:bg-blue-600 text-white w-7 h-7 rounded-lg flex items-center justify-center text-[10px] shadow-sm transition"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500 hover:bg-red-600 text-white w-7 h-7 rounded-lg flex items-center justify-center text-[10px] shadow-sm transition"><i class="fa-solid fa-trash-can"></i></button>
               </div>
             </div>
-            <div class="grid grid-cols-3 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl text-slate-600 border border-slate-100 mt-auto">
-              <div><span class="text-slate-400 block">No Seri:</span> <strong class="truncate block" title="${m.noSeri}">${m.noSeri}</strong></div>
-              <div><span class="text-slate-400 block">Tahun:</span> <strong>${m.tahun}</strong></div>
-              <div><span class="text-slate-400 block">Jumlah:</span> <strong class="text-emerald-600">${m.jumlah} Unit</strong></div>
+            
+            <div class="flex gap-3 mb-4">
+              ${(m.fotoUrl && m.fotoUrl.length > 50) ? `<img src="${m.fotoUrl}" class="w-12 h-12 rounded-xl object-cover border flex-shrink-0">` : ''}
+              <div>
+                <h4 class="font-bold text-slate-800 text-sm mb-0.5 leading-tight">${m.namaMesin}</h4>
+                <p class="text-[11px] text-slate-500 font-medium">${m.modelMesin || '-'} <span class="mx-1">•</span> <span class="font-mono text-[10px]">${m.noSeri}</span></p>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2.5 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100 mt-auto">
+              <div><span class="text-slate-400 block text-[9px] uppercase font-bold mb-0.5">Tahun</span> <span class="font-semibold text-slate-700">${m.tahun || '-'}</span></div>
+              <div><span class="text-slate-400 block text-[9px] uppercase font-bold mb-0.5">Jumlah</span> <span class="font-bold text-emerald-600">${m.jumlah} Unit</span></div>
+              <div class="col-span-2 flex items-center mt-0.5"><i class="fa-solid fa-location-dot text-slate-400 mr-1.5 text-[10px]"></i><span class="font-semibold text-slate-600">${m.plant}</span></div>
+              ${m.keterangan ? `<div class="col-span-2 border-t border-slate-200 pt-2 mt-1"><span class="text-slate-400 block text-[9px] uppercase font-bold mb-0.5">Keterangan</span> <span class="text-slate-600 italic text-[11px] leading-snug">${m.keterangan}</span></div>` : ''}
             </div>
           </div>
-        `).join('');
-      } else if (currentView === 'details') {
-        container.className = "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3";
-        container.innerHTML = data.map(m => `
-          <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center justify-between gap-3 relative hover:shadow-md transition duration-200 group">
-            <div class="flex items-center gap-3 overflow-hidden pr-12 w-full">
-              ${getImageHTML(m.fotoUrl, 'w-12 h-12 object-cover rounded-lg border flex-shrink-0')}
-              <div class="truncate w-full">
-                <h4 class="font-bold text-slate-800 text-sm truncate">${m.namaMesin}</h4>
-                <p class="text-[10px] text-slate-500 truncate">${m.plant} • <span class="text-blue-500 font-semibold">${m.tipeMesin || '-'}</span></p>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md hidden sm:block">${m.jumlah} Unit</span>
-              <div class="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
-                <button onclick="editDataMesin('${m.id}')" class="text-blue-400 hover:text-blue-600 p-1.5 transition bg-blue-50 rounded-lg" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
-                <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="text-red-400 hover:text-red-600 p-1.5 transition bg-red-50 rounded-lg" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
-              </div>
-            </div>
-          </div>
-        `).join('');
-      } else if (currentView === 'large') {
-        container.className = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4";
-        container.innerHTML = data.map(m => `
-          <div class="bg-white rounded-2xl p-3 shadow-sm border border-slate-100 flex flex-col justify-between relative group hover:shadow-md transition duration-200">
-            <div class="absolute top-4 right-4 flex gap-1 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-200">
-              <button onclick="editDataMesin('${m.id}')" class="bg-blue-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Edit Data"><i class="fa-solid fa-pen"></i></button>
-              <button onclick="hapusDataMesin('${m.id}', '${m.namaMesin}')" class="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-[9px] shadow-md transition" title="Hapus Data"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-            ${getImageHTML(m.fotoUrl, 'w-full h-28 object-cover rounded-lg border mb-2')}
-            <div class="flex flex-col flex-1">
-              <h4 class="font-bold text-slate-800 text-xs truncate pr-2">${m.namaMesin}</h4>
-              <p class="text-[9px] text-blue-500 font-bold mb-1 truncate">${m.tipeMesin || '-'}</p>
-              <div class="mt-auto pt-1 text-[10px] text-slate-600 bg-slate-50 p-1.5 rounded-lg flex justify-between items-center">
-                <span class="truncate pr-1" title="${m.noSeri}">${m.noSeri}</span>
-                <strong class="text-emerald-600 flex-shrink-0">${m.jumlah} U</strong>
-              </div>
-            </div>
-          </div>
-        `).join('');
-      }
+        `;
+      });
+      html += `</div>`;
+
+      container.innerHTML = html;
     }
 
-    document.getElementById('formMesin').addEventListener('submit', async (e) => {
+    document.getElementById('formMesin')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btnSimpan');
       const editId = document.getElementById('editId').value;
@@ -245,12 +290,14 @@
         }
 
         const dataPayload = {
-          namaMesin: document.getElementById('namaMesin').value,
           tipeMesin: document.getElementById('tipeMesin').value,
-          plant: document.getElementById('plant').value,
-          tahun: Number(document.getElementById('tahun').value),
+          namaMesin: document.getElementById('namaMesin').value,
+          modelMesin: document.getElementById('modelMesin').value,
           noSeri: document.getElementById('noSeri').value,
-          jumlah: Number(document.getElementById('jumlah').value)
+          tahun: document.getElementById('tahun').value,
+          keterangan: document.getElementById('keterangan').value,
+          jumlah: Number(document.getElementById('jumlah').value),
+          plant: document.getElementById('plant').value
         };
 
         if (editId) {
@@ -279,85 +326,90 @@
     window.hapusDataMesin = hapusDataMesin;
     window.getListMesin = () => listMesin;
     
-    muatData();
+    document.addEventListener("DOMContentLoaded", () => {
+      muatData();
+    });
   </script>
 </head>
-<body class="bg-slate-100 font-sans text-slate-800 pb-20">
+<body class="bg-slate-50 font-sans text-slate-800 pb-20">
 
-  <header class="bg-slate-900 text-white p-4 sticky top-0 z-40 shadow-md">
-    <!-- Diperlebar menggunakan max-w-6xl -->
+  <header class="bg-blue-950 text-white p-4 sticky top-0 z-40 shadow-md">
     <div class="max-w-6xl mx-auto flex justify-between items-center w-full">
       <div>
         <h1 class="font-bold text-lg tracking-wide"><i class="fa-solid fa-industry text-emerald-400 mr-2"></i>Master Mesin</h1>
-        <p class="text-xs text-slate-400">Dashboard & Cloud System</p>
+        <p class="text-xs text-slate-300">Corporate Manufacturing Dashboard</p>
       </div>
-      <button onclick="bukaModalTambah()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow transition flex items-center gap-1">
-        <i class="fa-solid fa-plus"></i> Tambah
+      <button onclick="bukaModalTambah()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow transition flex items-center gap-1.5">
+        <i class="fa-solid fa-plus"></i> Tambah Data
       </button>
     </div>
   </header>
 
-  <!-- Diperlebar menggunakan max-w-6xl untuk desktop -->
   <main class="max-w-6xl mx-auto p-4 md:p-6 lg:p-8">
     
     <!-- DASHBOARD KPI & LOG -->
-    <!-- Pada desktop menjadi 2 kolom proporsional -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-5 text-white shadow-sm flex flex-col justify-center min-h-[120px]">
-        <span class="text-[10px] md:text-xs font-semibold opacity-90 tracking-wide uppercase">Total Aset Keseluruhan</span>
-        <div class="flex items-end gap-2 mt-1">
-          <span id="kpiTotalItem" class="text-4xl font-bold">0</span>
-          <span class="text-[10px] md:text-xs mb-1.5 opacity-80">Mesin Terdata</span>
+      <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-3xl p-6 text-white shadow-md flex flex-col justify-center min-h-[120px]">
+        <span class="text-xs font-bold opacity-90 tracking-wider uppercase">Total Aset Keseluruhan</span>
+        <div class="flex items-end gap-2 mt-2">
+          <span id="kpiTotalItem" class="text-5xl font-extrabold">0</span>
+          <span class="text-xs mb-2 opacity-90">Mesin Terdata</span>
         </div>
         <div class="text-[10px] md:text-xs bg-black/20 px-3 py-1.5 rounded-lg mt-3 inline-block w-fit font-medium">
           <i class="fa-solid fa-cubes mr-1.5"></i><span id="kpiTotalUnit">0</span> Unit Aktual
         </div>
       </div>
       
-      <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[120px]">
+      <div class="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col min-h-[120px]">
         <span class="text-[10px] md:text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide border-b pb-2"><i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Riwayat Terakhir</span>
         <div id="logContainer" class="flex-1 flex flex-col justify-center gap-2"></div>
       </div>
     </div>
 
+    <!-- BLOK RINGKASAN TIPE MESIN -->
+    <div class="mb-6 bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+      <div class="flex justify-between items-center border-b pb-2 mb-2">
+        <span class="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center">
+          <i class="fa-solid fa-chart-pie mr-2 text-blue-500"></i> Ringkasan Berdasarkan Tipe Mesin
+        </span>
+      </div>
+      <p class="text-[10px] md:text-xs text-slate-500 mb-3 italic"><i class="fa-solid fa-hand-pointer mr-1.5 text-slate-400"></i>Ketuk pada kartu tipe mesin untuk melihat rincian.</p>
+      
+      <div id="ringkasanContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <!-- Kartu Tipe Mesin Vertikal dirender disini -->
+      </div>
+    </div>
+
     <!-- TOOLBAR PENCARIAN & FILTER -->
-    <div class="flex flex-col md:flex-row gap-3 md:gap-4 mb-6 bg-slate-50 border border-slate-200 p-3 md:p-4 rounded-xl shadow-sm items-center">
-      <div class="flex gap-2 w-full md:w-auto flex-1 items-center">
+    <div class="flex flex-col sm:flex-row gap-3 mb-6 bg-white border border-slate-200 p-3 rounded-2xl shadow-sm items-center">
+      <div class="flex gap-2 w-full flex-1 items-center">
         <div class="relative flex-1">
-          <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari mesin, tipe, atau plant..." class="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white shadow-sm transition">
+          <input type="text" id="searchInput" onkeyup="filterData()" placeholder="Cari mesin, tipe, model, atau keterangan..." class="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50 shadow-sm transition">
           <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-xs md:text-sm"></i>
         </div>
-        <button onclick="bukaRekapTipe()" class="bg-blue-50 border border-blue-200 text-blue-600 px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-blue-100 flex items-center justify-center shadow-sm whitespace-nowrap transition">
-          <i class="fa-solid fa-chart-pie mr-1.5"></i> Rekap
+        <button onclick="eksporPDF()" class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-emerald-100 flex items-center justify-center shadow-sm whitespace-nowrap transition">
+          <i class="fa-solid fa-file-pdf mr-1.5"></i> Ekspor PDF
         </button>
       </div>
-      <div class="flex gap-2 w-full md:w-auto items-center justify-between md:justify-end border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-4 mt-1 md:mt-0">
-        <div class="flex items-center gap-2 w-full md:w-auto">
-          <span class="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wide hidden sm:block"><i class="fa-solid fa-arrow-down-a-z mr-1"></i>Sortir:</span>
-          <select id="sortBy" onchange="filterData()" class="flex-1 md:w-44 bg-white border border-slate-200 text-xs md:text-sm font-semibold rounded-xl px-3 py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 cursor-pointer">
-            <option value="terbaru">Terbaru Diinput</option>
-            <option value="nama_asc">Nama (A-Z)</option>
-            <option value="tipe_asc">Tipe (A-Z)</option>
-            <option value="tahun_desc">Tahun (Terbaru)</option>
-            <option value="tahun_asc">Tahun (Terlama)</option>
-            <option value="plant_asc">Lokasi / Plant</option>
-          </select>
-        </div>
-        <select id="viewMode" onchange="filterData()" class="bg-white border border-slate-200 text-xs md:text-sm font-semibold rounded-xl px-3 py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 cursor-pointer">
-          <option value="card">Kartu</option>
-          <option value="details">List</option>
-          <option value="large">Ikon</option>
+      <div class="w-full sm:w-auto mt-1 sm:mt-0 flex gap-2 items-center">
+        <span class="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wide hidden md:block"><i class="fa-solid fa-arrow-down-a-z mr-1"></i>Sortir:</span>
+        <select id="sortBy" onchange="filterData()" class="w-full sm:w-44 bg-slate-50 border border-slate-200 text-xs md:text-sm font-semibold rounded-xl px-3 py-2.5 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700 cursor-pointer">
+          <option value="terbaru">Terbaru Diinput</option>
+          <option value="tipe_asc">Tipe (A-Z)</option>
+          <option value="nama_asc">Nama (A-Z)</option>
+          <option value="lokasi_asc">Lokasi / Plant</option>
         </select>
       </div>
     </div>
 
+    <!-- TABEL DATA UTAMA -->
     <div id="cardsContainer" class="w-full"></div>
   </main>
 
-  <!-- MODAL FORM INPUT & EDIT (Tetap Max-w-md agar tidak memanjang aneh di desktop) -->
-  <div id="modalForm" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
-    <div class="min-h-screen px-4 text-center flex items-center justify-center">
-      <div class="bg-white rounded-2xl max-w-md w-full p-6 text-left shadow-2xl relative my-8 border-t-4 border-emerald-500">
+  <!-- MODAL FORM INPUT & EDIT -->
+  <div id="modalForm" class="fixed inset-0 bg-blue-950/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
+    <div class="min-h-screen px-4 py-8 text-center flex items-center justify-center">
+      <div class="bg-white rounded-3xl max-w-md w-full p-6 text-left shadow-2xl relative border-t-4 border-emerald-500">
         <div class="flex justify-between items-center border-b pb-4 mb-4">
           <h3 id="modalTitle" class="font-bold text-slate-800 text-base">Input Mesin Baru</h3>
           <button onclick="tutupModal()" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -367,41 +419,30 @@
           <input type="hidden" id="editId">
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1.5">Nama Mesin</label>
-            <input type="text" id="namaMesin" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+            <label class="font-semibold text-slate-700 block mb-1.5">Tipe Mesin</label>
+            <input type="text" id="tipeMesin" required placeholder="Contoh: Press, Puncher..." class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 uppercase transition">
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1.5">Tipe Mesin</label>
-            <input type="text" id="tipeMesin" required placeholder="Contoh: Press, Puncher, UV Curing..." class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none uppercase transition">
+            <label class="font-semibold text-slate-700 block mb-1.5">Nama Mesin</label>
+            <input type="text" id="namaMesin" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 transition">
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="font-semibold text-slate-700 block mb-1.5">Plant / Lokasi</label>
-              <select id="plant" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-white cursor-pointer transition">
-                <option value="Assembly Plant Alpha">Assembly Plant Alpha</option>
-                <option value="Assembly Plant Beta">Assembly Plant Beta</option>
-                <option value="Plant 3">Plant 3</option>
-              </select>
-            </div>
-            <div>
-              <label class="font-semibold text-slate-700 block mb-1.5">Tahun Mesin</label>
-              <input type="number" id="tahun" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition" placeholder="2024">
-            </div>
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1.5">Model</label>
+            <input type="text" id="modelMesin" required placeholder="Cth: BR-X900" class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 transition">
           </div>
 
           <div>
             <label class="font-semibold text-slate-700 block mb-1.5">Nomor Seri</label>
             <div class="flex gap-2">
-              <input type="text" id="noSeri" required placeholder="Ketik manual atau scan" class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
-              <button type="button" onclick="bukaOpsiScan()" class="bg-slate-800 text-white px-4 rounded-xl hover:bg-slate-700 flex items-center justify-center transition">
+              <input type="text" id="noSeri" required placeholder="Ketik manual atau scan" class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 transition">
+              <button type="button" onclick="bukaOpsiScan()" class="bg-blue-950 text-white px-4 rounded-xl hover:bg-blue-900 flex items-center justify-center transition">
                 <i class="fa-solid fa-camera text-lg"></i>
               </button>
             </div>
             
             <div id="reader" class="hidden mt-2 rounded-xl overflow-hidden border"></div>
-
             <div id="ocrContainer" class="hidden mt-2 p-3 bg-slate-50 border rounded-xl text-center">
               <p class="text-[11px] text-slate-500 mb-2">Atau ambil foto plat nomor/teks langsung:</p>
               <input type="file" id="ocrInput" accept="image/*" capture="environment" onchange="prosesScanTeks(event)" class="text-[11px] file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
@@ -410,8 +451,28 @@
           </div>
 
           <div>
-            <label class="font-semibold text-slate-700 block mb-1.5">Jumlah (Unit)</label>
-            <input type="number" id="jumlah" value="1" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition">
+            <label class="font-semibold text-slate-700 block mb-1.5">Tahun</label>
+            <input type="text" id="tahun" required placeholder="Cth: 08, 2024 atau 2024" class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 transition">
+          </div>
+
+          <div>
+            <label class="font-semibold text-slate-700 block mb-1.5">Keterangan</label>
+            <textarea id="keterangan" rows="2" placeholder="Catatan kondisi, spesifikasi, atau info tambahan..." class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 transition resize-none"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1.5">Jumlah (Unit)</label>
+              <input type="number" id="jumlah" value="1" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 transition">
+            </div>
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1.5">Lokasi</label>
+              <select id="plant" required class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none bg-slate-50 cursor-pointer transition">
+                <option value="Assembly Plant Alpha">Assembly Plant Alpha</option>
+                <option value="Assembly Plant Beta">Assembly Plant Beta</option>
+                <option value="Plant 3">Plant 3</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -430,20 +491,33 @@
     </div>
   </div>
 
-  <!-- MODAL REKAP TIPE MESIN (Tetap Max-w-sm) -->
-  <div id="modalRekap" class="fixed inset-0 bg-slate-900/60 z-50 hidden backdrop-blur-sm overflow-y-auto">
-    <div class="min-h-screen px-4 text-center flex items-center justify-center">
-      <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-left shadow-2xl relative border-t-4 border-blue-500 my-8">
+  <!-- POP-UP LAPIS 1: NAMA MESIN BERDASARKAN TIPE -->
+  <div id="modalPopUpNama" class="fixed inset-0 bg-blue-950/70 z-50 hidden backdrop-blur-sm overflow-y-auto">
+    <div class="min-h-screen px-4 py-8 text-center flex items-center justify-center">
+      <div class="bg-white rounded-3xl max-w-sm w-full p-6 text-left shadow-2xl relative border-t-4 border-blue-500">
         <div class="flex justify-between items-center border-b pb-4 mb-4">
-          <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-list-ul text-blue-500 mr-2"></i>Rincian Tipe Mesin</h3>
-          <button onclick="tutupRekap()" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+          <h3 id="popUpNamaTitle" class="font-bold text-slate-800 text-base flex items-center"></h3>
+          <button onclick="tutupPopUpNama()" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark text-xl"></i></button>
         </div>
-        
         <div class="max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-          <ul id="listRekapTipe" class="divide-y divide-slate-100 flex flex-col gap-2"></ul>
+          <ul id="listPopUpNama" class="divide-y divide-slate-100 flex flex-col"></ul>
         </div>
+        <button onclick="tutupPopUpNama()" class="w-full py-3 mt-5 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 shadow-sm transition">Tutup</button>
+      </div>
+    </div>
+  </div>
 
-        <button onclick="tutupRekap()" class="w-full py-3 mt-5 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 shadow-sm transition">Tutup</button>
+  <!-- POP-UP LAPIS 2: DETAIL RINCIAN SPESIFIK -->
+  <div id="modalDetailItems" class="fixed inset-0 bg-blue-950/80 z-[60] hidden backdrop-blur-sm overflow-y-auto">
+    <div class="min-h-screen px-4 py-8 text-center flex items-center justify-center">
+      <div class="bg-white rounded-3xl max-w-md w-full p-6 text-left shadow-2xl relative border-t-4 border-emerald-500">
+        <div class="flex justify-between items-center border-b pb-4 mb-4">
+          <h3 id="detailItemsTitle" class="font-bold text-slate-800 text-base">Detail Rincian</h3>
+          <button onclick="tutupDetailItems()" class="text-slate-400 hover:text-slate-600 transition p-1"><i class="fa-solid fa-arrow-left text-xl"></i></button>
+        </div>
+        <div class="max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
+          <ul id="listDetailItems" class="flex flex-col gap-3"></ul>
+        </div>
       </div>
     </div>
   </div>
@@ -458,7 +532,6 @@
   <script>
     let html5QrCode = null;
 
-    // FUNGSI UTAMA FILTER & SORTING
     function filterData() {
       const q = document.getElementById('searchInput').value.toLowerCase();
       const sortBy = document.getElementById('sortBy').value;
@@ -468,7 +541,9 @@
         m.namaMesin.toLowerCase().includes(q) || 
         m.noSeri.toLowerCase().includes(q) || 
         m.plant.toLowerCase().includes(q) ||
-        (m.tipeMesin && m.tipeMesin.toLowerCase().includes(q))
+        (m.tipeMesin && m.tipeMesin.toLowerCase().includes(q)) ||
+        (m.modelMesin && m.modelMesin.toLowerCase().includes(q)) ||
+        (m.keterangan && m.keterangan.toLowerCase().includes(q))
       );
 
       filtered.sort((a, b) => {
@@ -476,11 +551,7 @@
           return a.namaMesin.localeCompare(b.namaMesin);
         } else if (sortBy === 'tipe_asc') {
           return (a.tipeMesin || '').localeCompare(b.tipeMesin || '');
-        } else if (sortBy === 'tahun_desc') {
-          return (Number(b.tahun) || 0) - (Number(a.tahun) || 0);
-        } else if (sortBy === 'tahun_asc') {
-          return (Number(a.tahun) || 0) - (Number(b.tahun) || 0);
-        } else if (sortBy === 'plant_asc') {
+        } else if (sortBy === 'lokasi_asc') {
           return (a.plant || '').localeCompare(b.plant || '');
         } else {
           return new Date(b.waktuInput || 0).getTime() - new Date(a.waktuInput || 0).getTime();
@@ -504,12 +575,14 @@
       if (!data) return;
 
       document.getElementById('editId').value = data.id;
-      document.getElementById('namaMesin').value = data.namaMesin || "";
       document.getElementById('tipeMesin').value = data.tipeMesin || "";
-      document.getElementById('plant').value = data.plant || "";
-      document.getElementById('tahun').value = data.tahun || "";
+      document.getElementById('namaMesin').value = data.namaMesin || "";
+      document.getElementById('modelMesin').value = data.modelMesin || "";
       document.getElementById('noSeri').value = data.noSeri || "";
+      document.getElementById('tahun').value = data.tahun || "";
+      document.getElementById('keterangan').value = data.keterangan || "";
       document.getElementById('jumlah').value = data.jumlah || 1;
+      document.getElementById('plant').value = data.plant || "";
 
       const imgP = document.getElementById('imgPreview');
       if (data.fotoUrl && data.fotoUrl.length > 50) {
@@ -529,60 +602,6 @@
       if (html5QrCode) html5QrCode.stop();
       document.getElementById('reader').classList.add('hidden');
       document.getElementById('ocrContainer').classList.add('hidden');
-    }
-
-    function bukaRekapTipe() {
-      const rekap = {};
-      const list = window.getListMesin();
-      
-      list.forEach(m => {
-        const tipe = m.tipeMesin ? m.tipeMesin.trim().toUpperCase() : 'LAIN-LAIN';
-        if (!rekap[tipe]) {
-          rekap[tipe] = { totalUnit: 0, mesins: [] };
-        }
-        rekap[tipe].totalUnit += (Number(m.jumlah) || 1);
-        rekap[tipe].mesins.push(m);
-      });
-
-      const container = document.getElementById('listRekapTipe');
-      let html = '';
-      
-      if (Object.keys(rekap).length === 0) {
-        html = '<li class="py-6 text-center text-sm text-slate-400">Data mesin masih kosong.</li>';
-      } else {
-        const sortedKeys = Object.keys(rekap).sort();
-        sortedKeys.forEach(tipe => {
-          html += `
-            <li class="pt-2 pb-4 border-b border-slate-100 last:border-0">
-              <div class="flex justify-between items-center mb-2.5">
-                <span class="font-bold text-slate-700 text-sm">${tipe}</span>
-                <span class="bg-blue-50 border border-blue-100 text-blue-600 px-2.5 py-1 rounded text-xs font-bold">${rekap[tipe].totalUnit} Unit</span>
-              </div>
-              <div class="flex flex-col gap-2 pl-2.5 border-l-2 border-slate-200 ml-1">
-          `;
-          
-          rekap[tipe].mesins.forEach(mesin => {
-            html += `
-                <div class="bg-slate-50 p-2.5 rounded-lg text-xs leading-relaxed border border-slate-100 hover:border-slate-300 transition">
-                  <div class="font-bold text-slate-800">${mesin.namaMesin}</div>
-                  <div class="text-slate-500 flex items-center justify-between mt-1">
-                    <span class="truncate pr-2"><i class="fa-solid fa-location-dot text-slate-400 mr-1.5"></i>${mesin.plant || '-'}</span>
-                    <span class="bg-slate-200 px-2 py-0.5 rounded font-medium text-slate-600">Thn: ${mesin.tahun || '-'}</span>
-                  </div>
-                </div>
-            `;
-          });
-
-          html += `</div></li>`;
-        });
-      }
-      
-      container.innerHTML = html;
-      document.getElementById('modalRekap').classList.remove('hidden');
-    }
-
-    function tutupRekap() {
-      document.getElementById('modalRekap').classList.add('hidden');
     }
 
     function previewFoto(e) {
@@ -653,15 +672,131 @@
       }
     }
 
+    function eksporPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('l', 'mm', 'a4');
+      
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(23, 37, 84); 
+      doc.text("Laporan Inventaris Mesin Assembly", 14, 15);
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      doc.text(`Dicetak pada: ${new Date().toLocaleString('id-ID')}`, 14, 21);
+
+      const list = window.getListMesin();
+      const tableData = list.map((m, index) => [
+        index + 1,
+        m.tipeMesin || '-',
+        m.namaMesin,
+        m.modelMesin || '-',
+        m.noSeri,
+        m.tahun || '-',
+        m.keterangan || '-',
+        `${m.jumlah}`,
+        m.plant
+      ]);
+
+      doc.autoTable({
+        startY: 26,
+        head: [['No', 'Tipe', 'Nama Mesin', 'Model', 'No Seri', 'Tahun', 'Keterangan', 'Qty', 'Lokasi']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [23, 37, 84], halign: 'center' }, 
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 }, 
+          5: { halign: 'center' }, 
+          7: { halign: 'center', fontStyle: 'bold', textColor: [5, 150, 105] } 
+        },
+        styles: { fontSize: 8, cellPadding: 3 },
+        alternateRowStyles: { fillColor: [248, 250, 252] }
+      });
+
+      doc.save("Rekap_Mesin_Assembly.pdf");
+    }
+
+    function bukaPopUpNamaMesin(tipe) {
+      const data = window.currentRekapTipe[tipe];
+      if (!data) return;
+
+      document.getElementById('popUpNamaTitle').innerHTML = `<i class="fa-solid fa-list-ul text-blue-500 mr-2"></i>Tipe: ${tipe}`;
+      
+      const rekapNama = {};
+      data.items.forEach(m => {
+        const nama = m.namaMesin ? m.namaMesin.trim() : 'Tanpa Nama';
+        if (!rekapNama[nama]) rekapNama[nama] = { total: 0, items: [] };
+        rekapNama[nama].total += (Number(m.jumlah) || 0);
+        rekapNama[nama].items.push(m);
+      });
+      
+      window.currentRekapNama = rekapNama;
+
+      let html = '';
+      Object.keys(rekapNama).sort().forEach(nama => {
+        html += `
+          <li class="flex justify-between items-center py-3 border-b border-slate-50 last:border-0">
+            <span onclick="bukaDetailItems('${nama}')" class="font-bold text-slate-700 hover:text-blue-600 text-sm truncate pr-4 cursor-pointer transition" title="Ketuk untuk melihat detail">${nama}</span>
+            <button onclick="bukaDetailItems('${nama}')" class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer shadow-sm flex-shrink-0">
+              ${rekapNama[nama].total} Unit <i class="fa-solid fa-chevron-right ml-1.5 text-[10px]"></i>
+            </button>
+          </li>
+        `;
+      });
+
+      document.getElementById('listPopUpNama').innerHTML = html;
+      document.getElementById('modalPopUpNama').classList.remove('hidden');
+    }
+
+    function tutupPopUpNama() {
+      document.getElementById('modalPopUpNama').classList.add('hidden');
+    }
+
+    function bukaDetailItems(nama) {
+      const data = window.currentRekapNama[nama];
+      if (!data) return;
+
+      document.getElementById('detailItemsTitle').innerHTML = `<i class="fa-solid fa-box-open text-emerald-500 mr-2"></i>Detail: ${nama}`;
+      
+      let html = '';
+      data.items.forEach(m => {
+        html += `
+          <li class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs shadow-sm">
+            <div class="grid grid-cols-2 gap-y-3 gap-x-4">
+              <div><span class="text-slate-400 block text-[10px] uppercase font-semibold mb-0.5">Model</span> <span class="font-bold text-slate-800">${m.modelMesin || '-'}</span></div>
+              <div><span class="text-slate-400 block text-[10px] uppercase font-semibold mb-0.5">No Seri</span> <span class="font-mono font-bold text-slate-800">${m.noSeri}</span></div>
+              <div><span class="text-slate-400 block text-[10px] uppercase font-semibold mb-0.5">Tahun</span> <span class="font-semibold text-slate-700">${m.tahun || '-'}</span></div>
+              <div><span class="text-slate-400 block text-[10px] uppercase font-semibold mb-0.5">Lokasi</span> <span class="font-semibold text-slate-700">${m.plant}</span></div>
+              <div class="col-span-2 bg-white p-2.5 rounded-lg border border-slate-100 mt-1">
+                <span class="text-slate-400 block text-[10px] uppercase font-semibold mb-1">Keterangan</span> 
+                <span class="text-slate-600 font-medium leading-relaxed">${m.keterangan || '-'}</span>
+              </div>
+            </div>
+          </li>
+        `;
+      });
+
+      document.getElementById('listDetailItems').innerHTML = html;
+      document.getElementById('modalDetailItems').classList.remove('hidden');
+    }
+
+    function tutupDetailItems() {
+      document.getElementById('modalDetailItems').classList.add('hidden');
+    }
+
     window.bukaModalTambah = bukaModalTambah;
     window.editDataMesin = editDataMesin;
     window.tutupModal = tutupModal;
-    window.bukaRekapTipe = bukaRekapTipe;
-    window.tutupRekap = tutupRekap;
     window.previewFoto = previewFoto;
     window.bukaOpsiScan = bukaOpsiScan;
     window.prosesScanTeks = prosesScanTeks;
     window.filterData = filterData;
+    window.eksporPDF = eksporPDF;
+    window.bukaPopUpNamaMesin = bukaPopUpNamaMesin;
+    window.tutupPopUpNama = tutupPopUpNama;
+    window.bukaDetailItems = bukaDetailItems;
+    window.tutupDetailItems = tutupDetailItems;
   </script>
 </body>
 </html>
