@@ -16,6 +16,7 @@
   <!-- jsPDF & AutoTable untuk Ekspor Laporan -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- Firebase SDK -->
   <script type="module">
@@ -198,7 +199,6 @@
       }
 
       let html = '';
-
       // TAMPILAN TABEL UNTUK DESKTOP / PC
       html += `
         <div class="hidden md:block w-full overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-200">
@@ -397,8 +397,7 @@
     <div class="mb-6 bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-3 mb-4 gap-3">
         <div>
-          <span class="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center mb-1">
-            <i class="fa-solid fa-chart-pie mr-2 text-blue-500"></i> Ringkasan Tipe Mesin
+          <span class="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center mb-1">            <i class="fa-solid fa-chart-pie mr-2 text-blue-500"></i> Ringkasan Tipe Mesin
           </span>
           <p class="text-[9px] md:text-[10px] text-slate-500 italic"><i class="fa-solid fa-hand-pointer mr-1.5 text-slate-400"></i>Ketuk kartu untuk melihat rincian.</p>
         </div>
@@ -423,6 +422,9 @@
         </div>
         <button onclick="eksporPDF()" class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-emerald-100 flex items-center justify-center shadow-sm whitespace-nowrap transition">
           <i class="fa-solid fa-file-pdf mr-1.5"></i> Ekspor PDF
+        </button>
+        <button onclick="eksporExcel()" class="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2.5 rounded-xl text-xs md:text-sm font-bold hover:bg-blue-100 flex items-center justify-center shadow-sm whitespace-nowrap transition">
+          <i class="fa-solid fa-file-excel mr-1.5"></i> Ekspor Excel
         </button>
       </div>
       <div class="w-full sm:w-auto mt-1 sm:mt-0 flex gap-2 items-center">
@@ -597,8 +599,7 @@
       }
     }
 
-    function bukaModalTambah() { 
-      document.getElementById('formMesin').reset();
+    function bukaModalTambah() {       document.getElementById('formMesin').reset();
       document.getElementById('editId').value = "";
       document.getElementById('modalTitle').innerText = "Input Mesin Baru";
       document.getElementById('imgPreview').classList.add('hidden');
@@ -756,6 +757,56 @@
       doc.save("Rekap_Mesin_Assembly.pdf");
     }
 
+    // Ekspor seluruh data inventaris ke format XLSX (Microsoft Excel dan LibreOffice Calc).
+    function eksporExcel() {
+      const list = window.getListMesin();
+      if (!Array.isArray(list) || list.length === 0) { alert("Belum ada data mesin untuk diekspor."); return; }
+      if (typeof XLSX === "undefined") { alert("Library Excel belum termuat. Periksa koneksi internet dan muat ulang halaman."); return; }
+      try {
+        const now = new Date();
+        const totalUnit = list.reduce((total, item) => total + (Number(item.jumlah) || 0), 0);
+        const dateTag = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0");
+        const summary = [
+          ["LAPORAN INVENTARIS MESIN ASSEMBLY"],
+          ["Tanggal Ekspor", now.toLocaleString("id-ID")],
+          ["Total Mesin Terdata", list.length],
+          ["Total Unit Aktual", totalUnit],
+          ["Sumber Data", "Database Mesin Assembly"]
+        ];
+        const wsSummary = XLSX.utils.aoa_to_sheet(summary);
+        wsSummary["!cols"] = [{ wch: 25 }, { wch: 38 }];
+        const rows = [
+          ["LAPORAN INVENTARIS MESIN ASSEMBLY"],
+          ["Tanggal Ekspor: " + now.toLocaleString("id-ID")],
+          [],
+          ["No", "Tipe Mesin", "Nama Mesin", "Model", "No. Seri", "Tahun", "Buatan", "Keterangan", "Jumlah (Unit)", "Lokasi", "Tanggal Input"]
+        ];
+        list.forEach(function(item, index) {
+          const date = item.waktuInput ? new Date(item.waktuInput) : null;
+          const inputDate = date && !Number.isNaN(date.getTime()) ? date.toLocaleString("id-ID") : "-";
+          rows.push([
+            index + 1, item.tipeMesin || "-", item.namaMesin || "-", item.modelMesin || "-",
+            item.noSeri || "-", item.tahun || "-", item.buatan || "-", item.keterangan || "-",
+            Number(item.jumlah) || 0, item.plant || "-", inputDate
+          ]);
+        });
+        const wsData = XLSX.utils.aoa_to_sheet(rows);
+        wsData["!cols"] = [
+          { wch: 6 }, { wch: 18 }, { wch: 28 }, { wch: 18 }, { wch: 18 },
+          { wch: 9 }, { wch: 18 }, { wch: 36 }, { wch: 15 }, { wch: 24 }, { wch: 22 }
+        ];
+        wsData["!rows"] = [{ hpt: 26 }, { hpt: 20 }, { hpt: 8 }, { hpt: 22 }];
+        wsData["!autofilter"] = { ref: "A4:K" + rows.length };
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan");
+        XLSX.utils.book_append_sheet(wb, wsData, "Data Mesin");
+        wb.Props = { Title: "Laporan Inventaris Mesin Assembly", Author: "Database Mesin Assembly", CreatedDate: now };
+        XLSX.writeFile(wb, "Rekap_Mesin_Assembly_" + dateTag + ".xlsx", { bookType: "xlsx", compression: true });
+      } catch (err) {
+        console.error("Gagal mengekspor Excel:", err);
+        alert("Gagal membuat file Excel: " + (err.message || "Kesalahan tidak diketahui"));
+      }
+    }
     function bukaPopUpNamaMesin(tipe) {
       const data = window.currentRekapTipe[tipe];
       if (!data) return;
@@ -797,8 +848,7 @@
       if (!data) return;
 
       document.getElementById('detailItemsTitle').innerHTML = `<i class="fa-solid fa-box-open text-emerald-500 mr-2"></i>Detail: ${nama}`;
-      
-      let html = '';
+            let html = '';
       data.items.forEach(m => {
         html += `
           <li class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs shadow-sm">
@@ -834,6 +884,7 @@
     window.prosesScanTeks = prosesScanTeks;
     window.filterData = filterData;
     window.eksporPDF = eksporPDF;
+    window.eksporExcel = eksporExcel;
     window.bukaPopUpNamaMesin = bukaPopUpNamaMesin;
     window.tutupPopUpNama = tutupPopUpNama;
     window.bukaDetailItems = bukaDetailItems;
